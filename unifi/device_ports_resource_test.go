@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/ubiquiti-community/go-unifi/unifi"
 )
@@ -193,11 +194,63 @@ func TestAccDevicePorts_basic(t *testing.T) {
 					devicePortsRawEntry(t, 2, "forward", `"customize"`),
 				),
 			},
+			// Renaming one port leaves every other declared port, including the
+			// aggregation lead on port 7, planned with its prior values.
+			{
+				Config: testAccDevicePortsConfig_rename(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						"unifi_device_ports.test",
+						"ports.1.name",
+						"acc-trunk-renamed-again",
+					),
+					resource.TestCheckResourceAttrSet("unifi_device_ports.test", "ports.7.lag_idx"),
+				),
+			},
+			// A second aggregation group, then the first one removed: the
+			// remaining lead must keep its lag_idx or the apply is inconsistent.
+			{
+				Config: testAccDevicePortsConfig_twoLags(),
+				Check: resource.TestCheckResourceAttrSet(
+					"unifi_device_ports.test",
+					"ports.9.lag_idx",
+				),
+			},
+			{
+				Config: testAccDevicePortsConfig_dropFirstLag(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("unifi_device_ports.test", "ports.7.op_mode"),
+					resource.TestCheckResourceAttrSet("unifi_device_ports.test", "ports.9.lag_idx"),
+				),
+			},
+			// The same MAC spelled with dashes must not replace the resource:
+			// a replacement resets every port on the device.
+			{
+				Config: testAccDevicePortsConfig_dropFirstLagMAC("00-27-22-00-00-05"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(
+							"unifi_device_ports.test",
+							plancheck.ResourceActionUpdate,
+						),
+					},
+				},
+			},
+			{
+				Config: testAccDevicePortsConfig_dropFirstLag(),
+			},
 			{
 				ResourceName:      "unifi_device_ports.test",
 				ImportState:       true,
 				ImportStateId:     devicePortsTestMAC,
 				ImportStateVerify: true,
+			},
+			{
+				ResourceName:            "unifi_device_ports.test",
+				ImportState:             true,
+				ImportStateId:           "default:00-27-22-00-00-05",
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"mac"},
 			},
 			{
 				ResourceName:    "unifi_device_ports.test",
@@ -293,6 +346,20 @@ resource "unifi_device_ports" "test" {
 				PlanOnly:    true,
 				ExpectError: regexp.MustCompile(`Link aggregation member declared as a port`),
 			},
+			{
+				Config: testAccDevicePortsConfig_lag(
+					`op_mode = "aggregate", aggregate_members = [6, 7]`,
+				),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Aggregation group without its lead`),
+			},
+			{
+				Config: testAccDevicePortsConfig_lag(
+					`op_mode = "switch", aggregate_members = [5, 6]`,
+				),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Aggregation members on a non-aggregate port`),
+			},
 		},
 	})
 }
@@ -353,4 +420,61 @@ resource "unifi_device_ports" "test" {
   }
 }
 `, devicePortsTestMAC)
+}
+
+func testAccDevicePortsConfig_rename() string {
+	return testAccDevicePortsNetworks() + fmt.Sprintf(`
+resource "unifi_device_ports" "test" {
+  mac = %q
+  ports = {
+    "1" = { name = "acc-trunk-renamed-again", tagged_vlan_mgmt = "block_all" }
+    "7" = { name = "acc-becomes-lag", op_mode = "aggregate", aggregate_members = [7, 8] }
+    "2" = {
+      name                     = "acc-access"
+      tagged_vlan_mgmt         = "custom"
+      excluded_networkconf_ids = [unifi_network.ports_a.id]
+    }
+  }
+}
+`, devicePortsTestMAC)
+}
+
+func testAccDevicePortsConfig_twoLags() string {
+	return fmt.Sprintf(`
+resource "unifi_device_ports" "test" {
+  mac = %q
+  ports = {
+    "1" = { name = "acc-trunk-renamed-again", tagged_vlan_mgmt = "block_all" }
+    "7" = { name = "acc-becomes-lag", op_mode = "aggregate", aggregate_members = [7, 8] }
+    "9" = { name = "acc-second-lag", op_mode = "aggregate", aggregate_members = [9, 10] }
+  }
+}
+`, devicePortsTestMAC)
+}
+
+func testAccDevicePortsConfig_dropFirstLag() string {
+	return testAccDevicePortsConfig_dropFirstLagMAC(devicePortsTestMAC)
+}
+
+func testAccDevicePortsConfig_dropFirstLagMAC(mac string) string {
+	return fmt.Sprintf(`
+resource "unifi_device_ports" "test" {
+  mac = %q
+  ports = {
+    "1" = { name = "acc-trunk-renamed-again", tagged_vlan_mgmt = "block_all" }
+    "9" = { name = "acc-second-lag", op_mode = "aggregate", aggregate_members = [9, 10] }
+  }
+}
+`, mac)
+}
+
+func testAccDevicePortsConfig_lag(port5 string) string {
+	return fmt.Sprintf(`
+resource "unifi_device_ports" "test" {
+  mac = %q
+  ports = {
+    "5" = { %s }
+  }
+}
+`, devicePortsTestMAC, port5)
 }

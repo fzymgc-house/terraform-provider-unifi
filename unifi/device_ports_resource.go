@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"regexp"
 	"slices"
@@ -63,6 +64,9 @@ func devicePortAttributes() map[string]schema.Attribute {
 	attrs := make(map[string]schema.Attribute, len(portFields))
 	for _, f := range portFields {
 		optional := !f.computedOnly
+		if len(f.oneOf) > 0 {
+			f.description += " One of `" + strings.Join(f.oneOf, "`, `") + "`."
+		}
 		switch f.kind {
 		case portFieldBool:
 			attrs[f.name] = schema.BoolAttribute{
@@ -124,6 +128,8 @@ func (r *devicePortsResource) Schema(
 			"A port attribute left out of the configuration is read from the controller and left as it is; " +
 			"removing an attribute from the configuration does not reset it. Keys the controller holds that this " +
 			"resource does not model are always written back unchanged.\n\n" +
+			"If a `unifi_device` manages other attributes of the same device, make one resource depend on the " +
+			"other so their writes to the device do not interleave.\n\n" +
 			"Destroying the resource resets every port on the device to the default configuration. Use a " +
 			"`removed` block with `destroy = false` to stop managing a device without touching its ports.",
 		Attributes: map[string]schema.Attribute{
@@ -136,7 +142,18 @@ func (r *devicePortsResource) Schema(
 				MarkdownDescription: "The MAC address of the device.",
 				Required:            true,
 				CustomType:          hwtypes.MACAddressType{},
-				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIf(
+						func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+							resp.RequiresReplace = !sameMAC(
+								req.StateValue.ValueString(),
+								req.PlanValue.ValueString(),
+							)
+						},
+						"Replaced when the MAC address changes; a different spelling of the same address is an in-place update.",
+						"Replaced when the MAC address changes; a different spelling of the same address is an in-place update.",
+					),
+				},
 			},
 			"site": schema.StringAttribute{
 				MarkdownDescription: "The site the device belongs to. Defaults to the provider's site.",
@@ -187,8 +204,9 @@ func (r *devicePortsResource) Configure(
 	r.client = client
 }
 
-// ValidateConfig rejects a member port of a link aggregation group declared as
-// a port of its own: the controller stores the group on its lead port only.
+// ValidateConfig checks link aggregation groups: a group lists its lead port,
+// its lead sets op_mode = "aggregate", and no member port is declared as a
+// port of its own, since the controller stores the group on its lead only.
 func (r *devicePortsResource) ValidateConfig(
 	ctx context.Context,
 	req resource.ValidateConfigRequest,
@@ -199,23 +217,43 @@ func (r *devicePortsResource) ValidateConfig(
 	if resp.Diagnostics.HasError() || ports.IsNull() || ports.IsUnknown() {
 		return
 	}
-	for _, lead := range devicePortsKeysSorted(ports.Elements()) {
-		obj, ok := ports.Elements()[lead].(types.Object)
+	elems := ports.Elements()
+	for _, lead := range devicePortsKeysSorted(elems) {
+		obj, ok := elems[lead].(types.Object)
 		if !ok || obj.IsNull() || obj.IsUnknown() {
 			continue
 		}
-		members, ok := obj.Attributes()["aggregate_members"].(types.Set)
+		attrs := obj.Attributes()
+		members, ok := attrs["aggregate_members"].(types.Set)
 		if !ok || members.IsNull() || members.IsUnknown() {
 			continue
 		}
-		var idxs []int64
-		resp.Diagnostics.Append(members.ElementsAs(ctx, &idxs, false)...)
-		for _, idx := range idxs {
-			key := strconv.FormatInt(idx, 10)
-			if key == lead {
+		at := path.Root("ports").AtMapKey(lead)
+		if opMode, ok := attrs["op_mode"].(types.String); ok && !opMode.IsNull() &&
+			!opMode.IsUnknown() &&
+			opMode.ValueString() != "aggregate" {
+			resp.Diagnostics.AddAttributeError(
+				at.AtName("op_mode"),
+				"Aggregation members on a non-aggregate port",
+				fmt.Sprintf(
+					"Port %s lists aggregate_members, so its op_mode must be \"aggregate\".",
+					lead,
+				),
+			)
+		}
+		includesLead := false
+		for _, m := range members.Elements() {
+			idx, ok := m.(types.Int64)
+			if !ok || idx.IsNull() || idx.IsUnknown() {
+				includesLead = true
 				continue
 			}
-			if _, declared := ports.Elements()[key]; declared {
+			key := strconv.FormatInt(idx.ValueInt64(), 10)
+			if key == lead {
+				includesLead = true
+				continue
+			}
+			if _, declared := elems[key]; declared {
 				resp.Diagnostics.AddAttributeError(
 					path.Root("ports").AtMapKey(key),
 					"Link aggregation member declared as a port",
@@ -227,6 +265,17 @@ func (r *devicePortsResource) ValidateConfig(
 					),
 				)
 			}
+		}
+		if !includesLead {
+			resp.Diagnostics.AddAttributeError(
+				at.AtName("aggregate_members"),
+				"Aggregation group without its lead",
+				fmt.Sprintf(
+					"aggregate_members on port %s must include port %s itself.",
+					lead,
+					lead,
+				),
+			)
 		}
 	}
 }
@@ -256,20 +305,23 @@ func (r *devicePortsResource) ModifyPlan(
 	}
 
 	attrTypes := devicePortAttrTypes()
-	ports := make(map[string]attr.Value, len(plan.Ports.Elements()))
+	planElems := plan.Ports.Elements()
+	stateElems := state.Ports.Elements()
+	configElems := config.Ports.Elements()
+	ports := make(map[string]attr.Value, len(planElems))
 	modified := false
-	for key, elem := range plan.Ports.Elements() {
+	for key, elem := range planElems {
 		planObj, ok := elem.(types.Object)
 		if !ok || planObj.IsNull() || planObj.IsUnknown() {
 			ports[key] = elem
 			continue
 		}
+		planAttrs := planObj.Attributes()
 		var configAttrs, stateAttrs map[string]attr.Value
-		if c, ok := config.Ports.Elements()[key].(types.Object); ok && !c.IsNull() &&
-			!c.IsUnknown() {
+		if c, ok := configElems[key].(types.Object); ok && !c.IsNull() && !c.IsUnknown() {
 			configAttrs = c.Attributes()
 		}
-		if s, ok := state.Ports.Elements()[key].(types.Object); ok && !s.IsNull() {
+		if s, ok := stateElems[key].(types.Object); ok && !s.IsNull() {
 			stateAttrs = s.Attributes()
 		}
 		declared := func(name string) bool {
@@ -280,7 +332,7 @@ func (r *devicePortsResource) ModifyPlan(
 		changed := stateAttrs == nil
 		for _, f := range portFields {
 			if !changed && !f.computedOnly && declared(f.name) &&
-				!planObj.Attributes()[f.name].Equal(stateAttrs[f.name]) {
+				!planAttrs[f.name].Equal(stateAttrs[f.name]) {
 				changed = true
 			}
 		}
@@ -292,7 +344,7 @@ func (r *devicePortsResource) ModifyPlan(
 		values := make(map[string]attr.Value, len(portFields))
 		for _, f := range portFields {
 			if !f.computedOnly && declared(f.name) {
-				values[f.name] = planObj.Attributes()[f.name]
+				values[f.name] = planAttrs[f.name]
 			} else {
 				values[f.name] = unknownPortValue(f.kind)
 			}
@@ -429,23 +481,34 @@ func (r *devicePortsResource) Delete(
 		resp.Diagnostics.AddError("Unable to read device", err.Error())
 		return
 	}
+	if len(device.PortOverrides) == 0 {
+		return
+	}
 	if err := r.putPortOverrides(ctx, site, device.ID, []portOverrideEntry{}); err != nil {
 		resp.Diagnostics.AddError("Unable to reset device ports", err.Error())
 	}
 }
 
-// ImportState accepts "<mac>" or "<site>:<mac>". A MAC address has five
-// colons, so a sixth marks a site prefix.
+// ImportState accepts "<mac>" or "<site>:<mac>", with the MAC in any form
+// net.ParseMAC reads. The MAC keeps the spelling given, so an import block
+// that uses the configuration's value plans no change.
 func (r *devicePortsResource) ImportState(
 	ctx context.Context,
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
 	site, mac := r.client.Site, req.ID
-	if parts := strings.SplitN(req.ID, ":", 2); strings.Count(req.ID, ":") == 6 {
-		site, mac = parts[0], parts[1]
+	if _, err := net.ParseMAC(mac); err != nil {
+		prefix, rest, found := strings.Cut(req.ID, ":")
+		if _, err := net.ParseMAC(rest); !found || prefix == "" || err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid import ID",
+				fmt.Sprintf("Expected \"<mac>\" or \"<site>:<mac>\", got %q.", req.ID),
+			)
+			return
+		}
+		site, mac = prefix, rest
 	}
-	mac = cleanMAC(mac)
 	resp.Diagnostics.Append(
 		resp.State.SetAttribute(ctx, path.Root("mac"), hwtypes.NewMACAddressValue(mac))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site"), site)...)
@@ -454,6 +517,16 @@ func (r *devicePortsResource) ImportState(
 		path.Root("ports"),
 		types.MapNull(types.ObjectType{AttrTypes: devicePortAttrTypes()}),
 	)...)
+}
+
+// sameMAC reports whether a and b spell the same hardware address.
+func sameMAC(a, b string) bool {
+	ha, errA := net.ParseMAC(a)
+	hb, errB := net.ParseMAC(b)
+	if errA != nil || errB != nil {
+		return strings.EqualFold(a, b)
+	}
+	return ha.String() == hb.String()
 }
 
 var errDeviceNotFound = errors.New("device not found")
