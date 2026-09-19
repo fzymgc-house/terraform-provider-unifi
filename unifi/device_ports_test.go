@@ -293,3 +293,31 @@ func TestDeclaredPorts_RejectsNonIndexKeys(t *testing.T) {
 		t.Error("expected an error for a non-numeric ports key")
 	}
 }
+
+// Some controllers send numbers as JSON strings, and an empty string for an
+// unset number; neither may fail the read of the whole device.
+func TestPortOverridesToState_ToleratesQuotedNumbers(t *testing.T) {
+	var entries []portOverrideEntry
+	raw := `[{"port_idx":"4","speed":"1000","dot1x_idle_timeout":"","aggregate_members":["4",5]}]`
+	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+		t.Fatal(err)
+	}
+	ports, diags := portOverridesToState(entries)
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	p := portAttrs(t, ports, "4")
+	if !p["speed"].Equal(types.Int64Value(1000)) {
+		t.Errorf("speed = %v, want 1000", p["speed"])
+	}
+	if !p["dot1x_idle_timeout"].IsNull() {
+		t.Errorf("dot1x_idle_timeout = %v, want null for an empty string", p["dot1x_idle_timeout"])
+	}
+	want, _ := types.SetValue(
+		types.Int64Type,
+		[]attr.Value{types.Int64Value(4), types.Int64Value(5)},
+	)
+	if !p["aggregate_members"].Equal(want) {
+		t.Errorf("aggregate_members = %v, want %v", p["aggregate_members"], want)
+	}
+}

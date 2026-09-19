@@ -269,7 +269,7 @@ var portFields = []portField{
 
 // portOverrideEntry is one element of a device's port_overrides array, kept as
 // raw JSON per key so that keys this provider does not model survive a
-// read-modify-write byte for byte.
+// read-modify-write unchanged.
 type portOverrideEntry map[string]json.RawMessage
 
 // rawDevice is the part of a device record unifi_device_ports reads.
@@ -284,11 +284,33 @@ func (e portOverrideEntry) index() (int64, error) {
 	if !ok {
 		return 0, fmt.Errorf("port_overrides entry has no port_idx")
 	}
-	var idx int64
-	if err := json.Unmarshal(raw, &idx); err != nil {
-		return 0, fmt.Errorf("port_overrides entry has a non-integer port_idx %s: %w", raw, err)
+	idx, set, err := decodeInt(raw)
+	if err != nil || !set {
+		return 0, fmt.Errorf("port_overrides entry has an unusable port_idx %s", raw)
 	}
 	return idx, nil
+}
+
+// decodeInt reads a JSON number, or a number inside a JSON string as some
+// controllers send them. An empty string or null reads as unset.
+func decodeInt(raw json.RawMessage) (v int64, set bool, err error) {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		if s == "" {
+			return 0, false, nil
+		}
+		v, err = strconv.ParseInt(s, 10, 64)
+		return v, err == nil, err
+	}
+	var n *json.Number
+	if err := json.Unmarshal(raw, &n); err != nil {
+		return 0, false, err
+	}
+	if n == nil {
+		return 0, false, nil
+	}
+	v, err = n.Int64()
+	return v, err == nil, err
 }
 
 // mergePortOverrides builds the port_overrides array to write. declared maps a
@@ -422,9 +444,12 @@ func decodePortValue(f portField, raw json.RawMessage) (attr.Value, diag.Diagnos
 		}
 		return types.BoolValue(v), diags
 	case portFieldInt:
-		var v int64
-		if err := json.Unmarshal(raw, &v); err != nil {
+		v, set, err := decodeInt(raw)
+		if err != nil {
 			return bad(err)
+		}
+		if !set {
+			return types.Int64Null(), diags
 		}
 		return types.Int64Value(v), diags
 	case portFieldStringSet:
@@ -440,13 +465,19 @@ func decodePortValue(f portField, raw json.RawMessage) (attr.Value, diag.Diagnos
 		diags.Append(d...)
 		return set, diags
 	case portFieldIntSet:
-		var v []int64
+		var v []json.RawMessage
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return bad(err)
 		}
 		elems := make([]attr.Value, 0, len(v))
-		for _, i := range v {
-			elems = append(elems, types.Int64Value(i))
+		for _, r := range v {
+			i, set, err := decodeInt(r)
+			if err != nil {
+				return bad(err)
+			}
+			if set {
+				elems = append(elems, types.Int64Value(i))
+			}
 		}
 		set, d := types.SetValue(types.Int64Type, elems)
 		diags.Append(d...)
