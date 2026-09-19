@@ -2768,7 +2768,13 @@ func Test_networkResource_networkToModel_importsVLANOnlySettingsFromController(t
 
 	t.Run("import takes the controller's values", func(t *testing.T) {
 		var model networkResourceModel
-		if d := r.networkToModel(context.Background(), network, &model, "default", seeded()); d.HasError() {
+		if d := r.networkToModel(
+			context.Background(),
+			network,
+			&model,
+			"default",
+			seeded(),
+		); d.HasError() {
 			t.Fatalf("networkToModel: %v", d)
 		}
 		if got := model.AutoScale; !got.Equal(types.BoolValue(false)) {
@@ -2789,7 +2795,13 @@ func Test_networkResource_networkToModel_importsVLANOnlySettingsFromController(t
 		omitted := *network
 		omitted.SettingPreference = nil
 		var model networkResourceModel
-		if d := r.networkToModel(context.Background(), &omitted, &model, "default", seeded()); d.HasError() {
+		if d := r.networkToModel(
+			context.Background(),
+			&omitted,
+			&model,
+			"default",
+			seeded(),
+		); d.HasError() {
 			t.Fatalf("networkToModel: %v", d)
 		}
 		if got := model.SettingPreference; !got.Equal(types.StringValue("auto")) {
@@ -2805,13 +2817,26 @@ func Test_networkResource_networkToModel_importsVLANOnlySettingsFromController(t
 		prior.LteLan = types.BoolValue(true)
 		prior.SettingPreference = types.StringValue("auto")
 		var model networkResourceModel
-		if d := r.networkToModel(context.Background(), network, &model, "default", prior); d.HasError() {
+		if d := r.networkToModel(
+			context.Background(),
+			network,
+			&model,
+			"default",
+			prior,
+		); d.HasError() {
 			t.Fatalf("networkToModel: %v", d)
 		}
-		if !model.AutoScale.Equal(prior.AutoScale) || !model.InternetAccess.Equal(prior.InternetAccess) ||
-			!model.LteLan.Equal(prior.LteLan) || !model.SettingPreference.Equal(prior.SettingPreference) {
-			t.Errorf("non-import read changed carried-forward values: got auto_scale=%v internet_access=%v lte_lan=%v setting_preference=%v",
-				model.AutoScale, model.InternetAccess, model.LteLan, model.SettingPreference)
+		if !model.AutoScale.Equal(prior.AutoScale) ||
+			!model.InternetAccess.Equal(prior.InternetAccess) ||
+			!model.LteLan.Equal(prior.LteLan) ||
+			!model.SettingPreference.Equal(prior.SettingPreference) {
+			t.Errorf(
+				"non-import read changed carried-forward values: got auto_scale=%v internet_access=%v lte_lan=%v setting_preference=%v",
+				model.AutoScale,
+				model.InternetAccess,
+				model.LteLan,
+				model.SettingPreference,
+			)
 		}
 	})
 }
