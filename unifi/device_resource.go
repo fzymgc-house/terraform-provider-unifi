@@ -745,6 +745,9 @@ func (r *deviceResource) Schema(
 
 		Blocks: map[string]schema.Block{
 			"port_override": schema.SetNestedBlock{
+				DeprecationMessage: "Use the unifi_device_ports resource instead. It declares the device's " +
+					"complete port configuration and keeps controller settings this block does not model. " +
+					"Do not use both on the same device.",
 				Description: "Per-port settings overrides, applied only to the ports you " +
 					"declare. Ports without a `port_override` block keep their existing " +
 					"controller-side configuration — the provider merges your declared " +
