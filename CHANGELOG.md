@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features
 
+- **New `unifi_device_ports` resource: one declaration of a device's complete port configuration.**
+  - **What it manages:** a `ports` map keyed by port index defines each port. A port not listed runs the controller's default configuration, so a port changed outside Terraform shows up in the plan.
+  - **Writes keep unmodelled keys:** a write patches the raw `port_overrides` JSON, touches only the keys the configuration declares, and keeps every key the provider does not model. go-unifi's `DevicePortOverrides` has no `lag_idx`, `stp_edge_state`, `stp_bpdu_guard_enabled`, `multicast_router_mode` or `sd_wan_underlay_port`, so a typed read-modify-write removes them from every port.
+  - **Imports:** by MAC or `site:mac`, and a configuration that states the live values plans no changes.
+  - **VLANs:** one model, `native_networkconf_id`, `tagged_vlan_mgmt` and `excluded_networkconf_ids`. The controller derives the legacy `forward` from `tagged_vlan_mgmt` and ignores writes to it.
+  - **Lifecycle:** create refuses a device that already has port definitions and asks for an import instead. Destroy resets every port to the default. On a port whose declared values change, keys the controller sets as a side effect (`lag_idx`, `voice_networkconf_id`) plan as known after apply.
+  - **Dependency:** requires the go-unifi fork with the exported `ApiClient.Do`.
+
 - **`unifi_wlan`: per-SSID band steering via the new `bandsteering_mode` attribute** (`off` | `equal` | `prefer_5g`). Modern controllers expose band steering on the wlanconf record, and on WiFi 6/7 access points this per-SSID control has replaced the legacy device-level one (still available as `unifi_device.bandsteering_mode`), so band steering was previously unmanageable on that hardware. Optional+Computed with value validation; the value is echoed from the controller on read, stays entirely off the wire when unset, and on controllers without per-SSID band steering (which accept and ignore the key) the declared value is kept in state instead of failing the apply with an inconsistent-result error. Requires go-unifi with `WLAN.BandsteeringMode` (go-unifi#72) (#388)
 
 ### 🐛 Bug Fixes
