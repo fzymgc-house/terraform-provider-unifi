@@ -2045,6 +2045,12 @@ func (r *networkResource) networkToModel(
 		model.Purpose = types.StringValue(unifi.PurposeCorporate)
 	}
 
+	// Determine if this is an import. On import only the ID/identity is seeded into
+	// state, so the computed network_isolation field is still null; in every other
+	// flow (create/read/update) the prior model carries it. We can no longer use
+	// Subnet for this since it is now optional (e.g. vlan_only networks).
+	isImport := previousModel != nil && previousModel.NetworkIsolation.IsNull()
+
 	// For vlan-only networks, the API does not return fields like subnet, gateway_type,
 	// setting_preference, etc. Preserve the plan/state values for these irrelevant fields
 	// to avoid "inconsistent result after apply" errors.
@@ -2082,6 +2088,20 @@ func (r *networkResource) networkToModel(
 		model.IPv6PDInterface = previousModel.IPv6PDInterface
 		model.IPv6PDPrefixID = previousModel.IPv6PDPrefixID
 		model.LteLan = previousModel.LteLan
+		// On import the previous model holds only the seeded identity, so the
+		// values carried forward above are null or schema defaults rather than
+		// what the controller stores. Read them from the controller instead,
+		// normalizing omitted fields to the schema defaults as the corporate path
+		// does, so an imported network plans no change and a later update writes
+		// back what the controller already had.
+		if isImport {
+			model.AutoScale = types.BoolValue(network.AutoScaleEnabled)
+			model.InternetAccess = types.BoolValue(network.InternetAccessEnabled)
+			model.LteLan = types.BoolValue(network.LteLanEnabled)
+			model.SettingPreference = stringValueOrDefault(network.SettingPreference, "auto")
+			model.GatewayType = stringValueOrDefault(network.GatewayType, "default")
+			model.IPv6InterfaceType = stringValueOrDefault(network.IPV6InterfaceType, "none")
+		}
 		// The IPv6 attributes below are Computed + UseStateForUnknown. On Create
 		// there is no prior state, so the plan carries them as unknown; copying
 		// the plan value verbatim would leave them unknown in the result and
@@ -2200,12 +2220,6 @@ func (r *networkResource) networkToModel(
 		model.LteLan = types.BoolValue(network.LteLanEnabled)
 		model.DomainName = types.StringPointerValue(network.DomainName)
 	}
-
-	// Determine if this is an import. On import only the ID/identity is seeded into
-	// state, so the computed network_isolation field is still null; in every other
-	// flow (create/read/update) networkToModel always assigns it above. We can no
-	// longer use Subnet for this since it is now optional (e.g. vlan_only networks).
-	isImport := previousModel != nil && previousModel.NetworkIsolation.IsNull()
 
 	// Build dhcp_guarding from API fields
 	shouldPopulateDhcpGuarding := false
@@ -2640,4 +2654,13 @@ func (r *networkResource) List(
 			}
 		}
 	}
+}
+
+// stringValueOrDefault maps a controller string the API omitted (nil or empty)
+// to the provider's schema default for that attribute.
+func stringValueOrDefault(v *string, def string) types.String {
+	if v == nil || *v == "" {
+		return types.StringValue(def)
+	}
+	return types.StringValue(*v)
 }

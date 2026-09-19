@@ -1807,53 +1807,77 @@ func Test_networkResource_networkToModel_normalizesVLANOnlyDefaults(t *testing.T
 		}
 	}
 
+	// A non-null network_isolation marks a Create/Read/Update prior model; null
+	// marks the identity-only model an import seeds.
+	notImport := types.BoolValue(false)
+
 	tests := []struct {
-		name                  string
-		previousGatewayType   types.String
-		previousIPv6Type      types.String
-		wantGatewayType       string
-		wantIPv6InterfaceType string
+		name                     string
+		previousNetworkIsolation types.Bool
+		previousGatewayType      types.String
+		previousIPv6Type         types.String
+		controllerGatewayType    *string
+		controllerIPv6Type       *string
+		wantGatewayType          string
+		wantIPv6InterfaceType    string
 	}{
 		{
-			name:                  "import nulls use schema defaults",
+			name:                  "import of omitted fields uses schema defaults",
 			previousGatewayType:   types.StringNull(),
 			previousIPv6Type:      types.StringNull(),
 			wantGatewayType:       "default",
 			wantIPv6InterfaceType: "none",
 		},
 		{
-			name:                  "unknown plan values use schema defaults",
-			previousGatewayType:   types.StringUnknown(),
-			previousIPv6Type:      types.StringUnknown(),
-			wantGatewayType:       "default",
-			wantIPv6InterfaceType: "none",
-		},
-		{
-			name:                  "empty prior values use schema defaults",
-			previousGatewayType:   types.StringValue(""),
-			previousIPv6Type:      types.StringValue(""),
-			wantGatewayType:       "default",
-			wantIPv6InterfaceType: "none",
-		},
-		{
-			name:                  "explicit prior values are preserved",
-			previousGatewayType:   types.StringValue("switch"),
-			previousIPv6Type:      types.StringValue("static"),
+			name:                  "import reads the controller's values",
+			previousGatewayType:   types.StringNull(),
+			previousIPv6Type:      types.StringNull(),
+			controllerGatewayType: strPtr("switch"),
+			controllerIPv6Type:    strPtr("static"),
 			wantGatewayType:       "switch",
 			wantIPv6InterfaceType: "static",
+		},
+		{
+			name:                     "unknown plan values use schema defaults",
+			previousNetworkIsolation: notImport,
+			previousGatewayType:      types.StringUnknown(),
+			previousIPv6Type:         types.StringUnknown(),
+			wantGatewayType:          "default",
+			wantIPv6InterfaceType:    "none",
+		},
+		{
+			name:                     "empty prior values use schema defaults",
+			previousNetworkIsolation: notImport,
+			previousGatewayType:      types.StringValue(""),
+			previousIPv6Type:         types.StringValue(""),
+			wantGatewayType:          "default",
+			wantIPv6InterfaceType:    "none",
+		},
+		{
+			name:                     "explicit prior values are preserved",
+			previousNetworkIsolation: notImport,
+			previousGatewayType:      types.StringValue("switch"),
+			previousIPv6Type:         types.StringValue("static"),
+			wantGatewayType:          "switch",
+			wantIPv6InterfaceType:    "static",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			previous := base()
+			if !tt.previousNetworkIsolation.IsNull() {
+				previous.NetworkIsolation = tt.previousNetworkIsolation
+			}
 			previous.GatewayType = tt.previousGatewayType
 			previous.IPv6InterfaceType = tt.previousIPv6Type
 			network := &unifi.Network{
-				ID:      "net-vlan-only-imported",
-				Name:    strPtr("Imported VLAN Only"),
-				Purpose: unifi.PurposeVLANOnly,
-				Enabled: true,
+				ID:                "net-vlan-only-imported",
+				Name:              strPtr("Imported VLAN Only"),
+				Purpose:           unifi.PurposeVLANOnly,
+				Enabled:           true,
+				GatewayType:       tt.controllerGatewayType,
+				IPV6InterfaceType: tt.controllerIPv6Type,
 			}
 			var model networkResourceModel
 			d := r.networkToModel(context.Background(), network, &model, "default", previous)
@@ -2711,6 +2735,83 @@ func Test_preserveUnmanagedDhcpServer(t *testing.T) {
 		}
 		if network.DHCPDEnabled {
 			t.Error("DHCPDEnabled = true, want untouched false (relay requires it off)")
+		}
+	})
+}
+
+func Test_networkResource_networkToModel_importsVLANOnlySettingsFromController(t *testing.T) {
+	r := &networkResource{}
+	network := &unifi.Network{
+		ID:                    "net-vlan-only-imported",
+		Name:                  strPtr("Imported VLAN Only"),
+		Purpose:               unifi.PurposeVLANOnly,
+		Enabled:               true,
+		AutoScaleEnabled:      false,
+		InternetAccessEnabled: true,
+		LteLanEnabled:         false,
+		SettingPreference:     strPtr("manual"),
+	}
+	seeded := func() *networkResourceModel {
+		return &networkResourceModel{
+			NetworkIsolation: types.BoolNull(),
+			DhcpServer:       types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
+			DhcpRelay:        types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
+			DhcpV6Server:     types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
+			DhcpGuarding:     types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
+			NatOutboundIPAddresses: types.ListNull(
+				types.ObjectType{AttrTypes: natOutboundIPAddresses()},
+			),
+			IPAliases:   types.ListNull(types.StringType),
+			IPv6Aliases: types.ListNull(types.StringType),
+		}
+	}
+
+	t.Run("import takes the controller's values", func(t *testing.T) {
+		var model networkResourceModel
+		if d := r.networkToModel(context.Background(), network, &model, "default", seeded()); d.HasError() {
+			t.Fatalf("networkToModel: %v", d)
+		}
+		if got := model.AutoScale; !got.Equal(types.BoolValue(false)) {
+			t.Errorf("auto_scale = %v, want false", got)
+		}
+		if got := model.InternetAccess; !got.Equal(types.BoolValue(true)) {
+			t.Errorf("internet_access = %v, want true", got)
+		}
+		if got := model.LteLan; !got.Equal(types.BoolValue(false)) {
+			t.Errorf("lte_lan = %v, want false", got)
+		}
+		if got := model.SettingPreference; !got.Equal(types.StringValue("manual")) {
+			t.Errorf("setting_preference = %v, want manual", got)
+		}
+	})
+
+	t.Run("import of an omitted setting_preference uses the schema default", func(t *testing.T) {
+		omitted := *network
+		omitted.SettingPreference = nil
+		var model networkResourceModel
+		if d := r.networkToModel(context.Background(), &omitted, &model, "default", seeded()); d.HasError() {
+			t.Fatalf("networkToModel: %v", d)
+		}
+		if got := model.SettingPreference; !got.Equal(types.StringValue("auto")) {
+			t.Errorf("setting_preference = %v, want auto", got)
+		}
+	})
+
+	t.Run("read after import keeps the prior values", func(t *testing.T) {
+		prior := seeded()
+		prior.NetworkIsolation = types.BoolValue(false)
+		prior.AutoScale = types.BoolValue(true)
+		prior.InternetAccess = types.BoolValue(false)
+		prior.LteLan = types.BoolValue(true)
+		prior.SettingPreference = types.StringValue("auto")
+		var model networkResourceModel
+		if d := r.networkToModel(context.Background(), network, &model, "default", prior); d.HasError() {
+			t.Fatalf("networkToModel: %v", d)
+		}
+		if !model.AutoScale.Equal(prior.AutoScale) || !model.InternetAccess.Equal(prior.InternetAccess) ||
+			!model.LteLan.Equal(prior.LteLan) || !model.SettingPreference.Equal(prior.SettingPreference) {
+			t.Errorf("non-import read changed carried-forward values: got auto_scale=%v internet_access=%v lte_lan=%v setting_preference=%v",
+				model.AutoScale, model.InternetAccess, model.LteLan, model.SettingPreference)
 		}
 	})
 }
