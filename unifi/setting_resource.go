@@ -1043,6 +1043,7 @@ func (r *settingResource) Schema(
 				MarkdownDescription: "RADIUS settings.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"accounting_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable RADIUS accounting.",
@@ -1091,6 +1092,7 @@ func (r *settingResource) Schema(
 				MarkdownDescription: "USG settings.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"broadcast_ping": schema.BoolAttribute{
 						MarkdownDescription: "Enable broadcast ping.",
@@ -1316,6 +1318,8 @@ func (r *settingResource) Schema(
 			"igmp_snooping": schema.SingleNestedAttribute{
 				MarkdownDescription: "Site-level IGMP snooping setting. On UniFi Network 10.3.x+ the effective IGMP snooping toggle lives here rather than on each network. Advanced querier/flood options configured in the UI are preserved across updates.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"enabled": schema.BoolAttribute{
 						MarkdownDescription: "Whether IGMP snooping is enabled for the site.",
@@ -1336,6 +1340,8 @@ func (r *settingResource) Schema(
 			"global_switch": schema.SingleNestedAttribute{
 				MarkdownDescription: "Site-wide switch settings (the `global_switch` setting). `dhcp_snoop` is the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on. Fields left unset keep the controller's current value across updates.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"dhcp_snoop": schema.BoolAttribute{
 						MarkdownDescription: "Whether DHCP snooping is enabled on every switch.",
@@ -1783,7 +1789,7 @@ func (r *settingResource) Create(
 	}
 
 	// Read back the settings
-	r.readSettings(ctx, site, &data, &resp.Diagnostics)
+	r.readSettings(ctx, site, &data, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -1834,9 +1840,18 @@ func (r *settingResource) Read(
 		site = r.client.Site
 	}
 
-	r.readSettings(ctx, site, &data, &resp.Diagnostics)
+	readAll := false
+	if req.Private != nil {
+		marker, d := req.Private.GetKey(ctx, importAllSectionsKey)
+		resp.Diagnostics.Append(d...)
+		readAll = len(marker) > 0
+	}
+	r.readSettings(ctx, site, &data, readAll, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	if readAll && resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importAllSectionsKey, nil)...)
 	}
 
 	// Terraform rejects any modification of a stored identity, so pass a
@@ -2116,7 +2131,7 @@ func (r *settingResource) Update(
 	}
 
 	// Read back the settings
-	r.readSettings(ctx, site, &plan, &resp.Diagnostics)
+	r.readSettings(ctx, site, &plan, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -2139,11 +2154,20 @@ func (r *settingResource) Delete(
 	// Just remove from state
 }
 
+// importAllSectionsKey marks, in private state, that the next Read follows an import and has
+// to read every section. The resource otherwise reads only the sections already in state, and
+// an import puts none there, so a configuration that states the live values planned every
+// section as an addition.
+const importAllSectionsKey = "import_all_sections"
+
 func (r *settingResource) ImportState(
 	ctx context.Context,
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
+	if resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importAllSectionsKey, []byte("1"))...)
+	}
 	// Import by resource identity (import block with identity, Terraform 1.12+).
 	if req.ID == "" {
 		var identity settingIdentityModel
@@ -2177,6 +2201,7 @@ func (r *settingResource) readSettings(
 	ctx context.Context,
 	site string,
 	data *settingResourceModel,
+	readAll bool,
 	diags *diag.Diagnostics,
 ) {
 	// Set the ID to the site since settings are site-level
@@ -2186,7 +2211,7 @@ func (r *settingResource) readSettings(
 	// Only read settings that were configured in the plan, set others to null
 
 	// Auto speedtest settings
-	if !data.AutoSpeedtest.IsNull() && !data.AutoSpeedtest.IsUnknown() {
+	if readAll || (!data.AutoSpeedtest.IsNull() && !data.AutoSpeedtest.IsUnknown()) {
 		_, asSetting, err := ui.GetSetting[*settings.AutoSpeedtest](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Auto Speedtest Setting", err.Error())
@@ -2205,7 +2230,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Country settings
-	if !data.Country.IsNull() && !data.Country.IsUnknown() {
+	if readAll || (!data.Country.IsNull() && !data.Country.IsUnknown()) {
 		_, s, err := ui.GetSetting[*settings.Country](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Country Setting", err.Error())
@@ -2222,7 +2247,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// DPI settings
-	if !data.Dpi.IsNull() && !data.Dpi.IsUnknown() {
+	if readAll || (!data.Dpi.IsNull() && !data.Dpi.IsUnknown()) {
 		_, s, err := ui.GetSetting[*settings.Dpi](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading DPI Setting", err.Error())
@@ -2239,7 +2264,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// LCM settings
-	if !data.Lcm.IsNull() && !data.Lcm.IsUnknown() {
+	if readAll || (!data.Lcm.IsNull() && !data.Lcm.IsUnknown()) {
 		_, s, err := ui.GetSetting[*settings.Lcm](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading LCM Setting", err.Error())
@@ -2256,7 +2281,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Network optimization settings
-	if !data.NetworkOpt.IsNull() && !data.NetworkOpt.IsUnknown() {
+	if readAll || (!data.NetworkOpt.IsNull() && !data.NetworkOpt.IsUnknown()) {
 		_, s, err := ui.GetSetting[*settings.NetworkOptimization](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Network Optimization Setting", err.Error())
@@ -2275,7 +2300,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// NTP settings
-	if !data.Ntp.IsNull() && !data.Ntp.IsUnknown() {
+	if readAll || (!data.Ntp.IsNull() && !data.Ntp.IsUnknown()) {
 		_, s, err := ui.GetSetting[*settings.Ntp](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading NTP Setting", err.Error())
@@ -2292,7 +2317,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Syslog settings
-	if !data.Syslog.IsNull() && !data.Syslog.IsUnknown() {
+	if readAll || (!data.Syslog.IsNull() && !data.Syslog.IsUnknown()) {
 		_, s, err := ui.GetSetting[*settings.Rsyslogd](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Syslog Setting", err.Error())
@@ -2311,9 +2336,17 @@ func (r *settingResource) readSettings(
 	}
 
 	// DoH settings
-	if !data.Doh.IsNull() && !data.Doh.IsUnknown() {
+	if readAll || (!data.Doh.IsNull() && !data.Doh.IsUnknown()) {
 		var planDoh settingDohModel
-		diags.Append(data.Doh.As(ctx, &planDoh, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Doh.As(
+				ctx,
+				&planDoh,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
 		}
@@ -2336,9 +2369,17 @@ func (r *settingResource) readSettings(
 	}
 
 	// IPS settings
-	if !data.Ips.IsNull() && !data.Ips.IsUnknown() {
+	if readAll || (!data.Ips.IsNull() && !data.Ips.IsUnknown()) {
 		var planIps settingIpsModel
-		diags.Append(data.Ips.As(ctx, &planIps, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Ips.As(
+				ctx,
+				&planIps,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
 		}
@@ -2381,10 +2422,18 @@ func (r *settingResource) readSettings(
 	}
 
 	// Mgmt settings
-	if !data.Mgmt.IsNull() && !data.Mgmt.IsUnknown() {
+	if readAll || (!data.Mgmt.IsNull() && !data.Mgmt.IsUnknown()) {
 		// Get the current plan/state values
 		var planMgmt settingMgmtModel
-		diags.Append(data.Mgmt.As(ctx, &planMgmt, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Mgmt.As(
+				ctx,
+				&planMgmt,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
 		}
@@ -2407,10 +2456,18 @@ func (r *settingResource) readSettings(
 	}
 
 	// Radius settings
-	if !data.Radius.IsNull() && !data.Radius.IsUnknown() {
+	if readAll || (!data.Radius.IsNull() && !data.Radius.IsUnknown()) {
 		// Get the current plan/state values
 		var planRadius settingRadiusModel
-		diags.Append(data.Radius.As(ctx, &planRadius, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Radius.As(
+				ctx,
+				&planRadius,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
 		}
@@ -2445,10 +2502,18 @@ func (r *settingResource) readSettings(
 	}
 
 	// USG settings
-	if !data.USG.IsNull() && !data.USG.IsUnknown() {
+	if readAll || (!data.USG.IsNull() && !data.USG.IsUnknown()) {
 		// Get the current plan/state values
 		var planUSG settingUSGModel
-		diags.Append(data.USG.As(ctx, &planUSG, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.USG.As(
+				ctx,
+				&planUSG,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
 		}
@@ -2576,7 +2641,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// IGMP snooping (site-level)
-	if !data.IgmpSnooping.IsNull() && !data.IgmpSnooping.IsUnknown() {
+	if readAll || (!data.IgmpSnooping.IsNull() && !data.IgmpSnooping.IsUnknown()) {
 		_, igmpSetting, err := ui.GetSetting[*settings.IgmpSnooping](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading IGMP Snooping Setting", err.Error())
@@ -2594,7 +2659,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Global switch (site-level)
-	if !data.GlobalSwitch.IsNull() && !data.GlobalSwitch.IsUnknown() {
+	if readAll || (!data.GlobalSwitch.IsNull() && !data.GlobalSwitch.IsUnknown()) {
 		_, gsSetting, err := ui.GetSetting[*settings.GlobalSwitch](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Global Switch Setting", err.Error())
