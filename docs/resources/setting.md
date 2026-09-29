@@ -80,6 +80,7 @@ resource "unifi_setting" "radius_only" {
 - `country` (Attributes) Regulatory country settings. (see [below for nested schema](#nestedatt--country))
 - `doh` (Attributes) Encrypted DNS (DNS-over-HTTPS) settings. (see [below for nested schema](#nestedatt--doh))
 - `dpi` (Attributes) Deep Packet Inspection (DPI) settings. (see [below for nested schema](#nestedatt--dpi))
+- `global_switch` (Attributes) Site-wide switch settings (the `global_switch` setting). `dhcp_snoop` is the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on. Fields left unset keep the controller's current value across updates. (see [below for nested schema](#nestedatt--global_switch))
 - `igmp_snooping` (Attributes) Site-level IGMP snooping setting. On UniFi Network 10.3.x+ the effective IGMP snooping toggle lives here rather than on each network. Advanced querier/flood options configured in the UI are preserved across updates. (see [below for nested schema](#nestedatt--igmp_snooping))
 - `ips` (Attributes) Intrusion Prevention System (IPS/IDS) and threat management settings. Basic IDS/IPS uses the built-in Emerging Threats ruleset and is free. A UniFi CyberSecure subscription adds enhanced threat intelligence from Proofpoint and Cloudflare on top of the base ruleset. (see [below for nested schema](#nestedatt--ips))
 - `lcm` (Attributes) LCD/display (LCM) settings for devices with a screen. (see [below for nested schema](#nestedatt--lcm))
@@ -143,6 +144,24 @@ Optional:
 
 - `enabled` (Boolean) Whether DPI is enabled.
 - `fingerprinting_enabled` (Boolean) Whether device fingerprinting is enabled.
+
+
+<a id="nestedatt--global_switch"></a>
+### Nested Schema for `global_switch`
+
+Optional:
+
+- `auto_stp_edge_detection_enabled` (Boolean) Whether switches detect spanning tree edge ports automatically.
+- `dhcp_snoop` (Boolean) Whether DHCP snooping is enabled on every switch.
+- `dot1x_fallback_networkconf_id` (String) ID of the network a client lands on when 802.1X authentication fails. Empty for none.
+- `dot1x_portctrl_enabled` (Boolean) Whether 802.1X port control is enabled site-wide.
+- `flowctrl_enabled` (Boolean) Whether Ethernet flow control is enabled on every switch.
+- `jumboframe_enabled` (Boolean) Whether jumbo frames are enabled on every switch.
+- `link_debounce` (Number) Link debounce time in milliseconds. `0` disables it.
+- `poe_staging_delay_msec` (Number) Delay in milliseconds between powering PoE ports at boot.
+- `radiusprofile_id` (String) ID of the RADIUS profile used for 802.1X. Empty for none.
+- `stp_version` (String) Spanning tree version. One of `stp`, `rstp`, `disabled`.
+- `switch_exclusions` (List of String) MAC addresses of switches excluded from the site-wide settings.
 
 
 <a id="nestedatt--igmp_snooping"></a>

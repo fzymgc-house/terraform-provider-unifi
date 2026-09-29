@@ -197,11 +197,15 @@ func (r *portProfileResource) Schema(
 			},
 			"dot1x_idle_timeout": schema.StringAttribute{
 				Description: "The idle timeout to use when using MAC Based 802.1X control, as a " +
-					"Go duration string (e.g. `5m`, `300s`). Defaults to `5m0s`.",
+					"Go duration string (e.g. `5m`, `300s`). Unset means the controller's own default: " +
+					"the value stays off the wire and is read back from the controller, so a profile the " +
+					"controller stores without the key imports with no change.",
 				CustomType: timetypes.GoDurationType{},
 				Optional:   true,
 				Computed:   true,
-				Default:    stringdefault.StaticString("5m0s"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					validators.GoDurationBetween(0, 65535*time.Second),
 					validators.GoDurationMultipleOf(time.Second),

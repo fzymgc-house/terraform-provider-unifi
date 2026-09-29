@@ -20,6 +20,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -248,6 +250,7 @@ type settingResourceModel struct {
 	Radius        types.Object   `tfsdk:"radius"`
 	USG           types.Object   `tfsdk:"usg"`
 	IgmpSnooping  types.Object   `tfsdk:"igmp_snooping"`
+	GlobalSwitch  types.Object   `tfsdk:"global_switch"`
 	Timeouts      timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -258,6 +261,24 @@ type settingResourceModel struct {
 type settingIgmpSnoopingModel struct {
 	Enabled    types.Bool `tfsdk:"enabled"`
 	NetworkIDs types.List `tfsdk:"network_ids"`
+}
+
+// settingGlobalSwitchModel is the nested global_switch block: the site-wide switch settings,
+// among them dhcp_snoop, which DHCP Guard on a network depends on. The controller replaces the
+// whole section on write, so every field the user leaves unset is read from the controller first
+// and written back as it was.
+type settingGlobalSwitchModel struct {
+	DHCPSnoop                   types.Bool   `tfsdk:"dhcp_snoop"`
+	Dot1XPortctrlEnabled        types.Bool   `tfsdk:"dot1x_portctrl_enabled"`
+	Dot1XFallbackNetworkID      types.String `tfsdk:"dot1x_fallback_networkconf_id"`
+	RADIUSProfileID             types.String `tfsdk:"radiusprofile_id"`
+	FlowctrlEnabled             types.Bool   `tfsdk:"flowctrl_enabled"`
+	JumboframeEnabled           types.Bool   `tfsdk:"jumboframe_enabled"`
+	StpVersion                  types.String `tfsdk:"stp_version"`
+	AutoStpEdgeDetectionEnabled types.Bool   `tfsdk:"auto_stp_edge_detection_enabled"`
+	LinkDebounce                types.Int64  `tfsdk:"link_debounce"`
+	PoeStagingDelayMsec         types.Int64  `tfsdk:"poe_staging_delay_msec"`
+	SwitchExclusions            types.List   `tfsdk:"switch_exclusions"`
 }
 
 // Shared attribute-type maps for the doh/ips nested objects and lists. These
@@ -384,6 +405,19 @@ var (
 	igmpSnoopingAttrTypes = map[string]attr.Type{
 		"enabled":     types.BoolType,
 		"network_ids": types.ListType{ElemType: types.StringType},
+	}
+	globalSwitchAttrTypes = map[string]attr.Type{
+		"dhcp_snoop":                      types.BoolType,
+		"dot1x_portctrl_enabled":          types.BoolType,
+		"dot1x_fallback_networkconf_id":   types.StringType,
+		"radiusprofile_id":                types.StringType,
+		"flowctrl_enabled":                types.BoolType,
+		"jumboframe_enabled":              types.BoolType,
+		"stp_version":                     types.StringType,
+		"auto_stp_edge_detection_enabled": types.BoolType,
+		"link_debounce":                   types.Int64Type,
+		"poe_staging_delay_msec":          types.Int64Type,
+		"switch_exclusions":               types.ListType{ElemType: types.StringType},
 	}
 )
 
@@ -1299,6 +1333,106 @@ func (r *settingResource) Schema(
 					},
 				},
 			},
+			"global_switch": schema.SingleNestedAttribute{
+				MarkdownDescription: "Site-wide switch settings (the `global_switch` setting). `dhcp_snoop` is the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on. Fields left unset keep the controller's current value across updates.",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"dhcp_snoop": schema.BoolAttribute{
+						MarkdownDescription: "Whether DHCP snooping is enabled on every switch.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"dot1x_portctrl_enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether 802.1X port control is enabled site-wide.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"dot1x_fallback_networkconf_id": schema.StringAttribute{
+						MarkdownDescription: "ID of the network a client lands on when 802.1X authentication fails. Empty for none.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"radiusprofile_id": schema.StringAttribute{
+						MarkdownDescription: "ID of the RADIUS profile used for 802.1X. Empty for none.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"flowctrl_enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether Ethernet flow control is enabled on every switch.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"jumboframe_enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether jumbo frames are enabled on every switch.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"stp_version": schema.StringAttribute{
+						MarkdownDescription: "Spanning tree version. One of `stp`, `rstp`, `disabled`.",
+						Optional:            true,
+						Computed:            true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("stp", "rstp", "disabled"),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"auto_stp_edge_detection_enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether switches detect spanning tree edge ports automatically.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"link_debounce": schema.Int64Attribute{
+						MarkdownDescription: "Link debounce time in milliseconds. `0` disables it.",
+						Optional:            true,
+						Computed:            true,
+						Validators:          []validator.Int64{int64validator.AtLeast(0)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
+					},
+					"poe_staging_delay_msec": schema.Int64Attribute{
+						MarkdownDescription: "Delay in milliseconds between powering PoE ports at boot.",
+						Optional:            true,
+						Computed:            true,
+						Validators:          []validator.Int64{int64validator.AtLeast(0)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
+					},
+					"switch_exclusions": schema.ListAttribute{
+						MarkdownDescription: "MAC addresses of switches excluded from the site-wide settings.",
+						ElementType:         types.StringType,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
+					},
+				},
+			},
 			"timeouts": timeouts.Attributes(
 				ctx,
 				timeouts.Opts{Create: true, Read: true, Update: true, Delete: true},
@@ -1641,6 +1775,13 @@ func (r *settingResource) Create(
 		}
 	}
 
+	if !data.GlobalSwitch.IsNull() && !data.GlobalSwitch.IsUnknown() {
+		r.writeGlobalSwitch(ctx, site, data.GlobalSwitch, "Creating", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	// Read back the settings
 	r.readSettings(ctx, site, &data, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -1963,6 +2104,13 @@ func (r *settingResource) Update(
 		}
 		if err := r.client.UpdateSetting(ctx, site, setting); err != nil {
 			resp.Diagnostics.AddError("Error Updating IGMP Snooping Setting", err.Error())
+			return
+		}
+	}
+
+	if !plan.GlobalSwitch.IsNull() && !plan.GlobalSwitch.IsUnknown() {
+		r.writeGlobalSwitch(ctx, site, plan.GlobalSwitch, "Updating", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
@@ -2443,6 +2591,24 @@ func (r *settingResource) readSettings(
 		data.IgmpSnooping = objValue
 	} else {
 		data.IgmpSnooping = types.ObjectNull(igmpSnoopingAttrTypes)
+	}
+
+	// Global switch (site-level)
+	if !data.GlobalSwitch.IsNull() && !data.GlobalSwitch.IsUnknown() {
+		_, gsSetting, err := ui.GetSetting[*settings.GlobalSwitch](r.client.ApiClient, ctx, site)
+		if err != nil {
+			diags.AddError("Error Reading Global Switch Setting", err.Error())
+			return
+		}
+		gsModel := r.globalSwitchSettingToModel(ctx, gsSetting, diags)
+		objValue, d := types.ObjectValueFrom(ctx, globalSwitchAttrTypes, gsModel)
+		diags.Append(d...)
+		if diags.HasError() {
+			return
+		}
+		data.GlobalSwitch = objValue
+	} else {
+		data.GlobalSwitch = types.ObjectNull(globalSwitchAttrTypes)
 	}
 }
 
@@ -3186,6 +3352,115 @@ func (r *settingResource) igmpSnoopingSettingToModel(
 	ids, d := types.ListValueFrom(ctx, types.StringType, setting.NetworkIDs)
 	diags.Append(d...)
 	model.NetworkIDs = ids
+	return model
+}
+
+// Global switch conversion functions.
+
+// writeGlobalSwitch reads the current global_switch section, overlays the user-set fields and
+// writes the section back. set/setting/global_switch replaces the whole section, so the read
+// first is what keeps every unset field.
+func (r *settingResource) writeGlobalSwitch(
+	ctx context.Context,
+	site string,
+	obj types.Object,
+	verb string,
+	diags *diag.Diagnostics,
+) {
+	var model settingGlobalSwitchModel
+	diags.Append(obj.As(ctx, &model, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
+		return
+	}
+	_, current, err := ui.GetSetting[*settings.GlobalSwitch](r.client.ApiClient, ctx, site)
+	if err != nil {
+		var notFound *ui.NotFoundError
+		if !errors.As(err, &notFound) {
+			diags.AddError("Error Reading Global Switch Setting", err.Error())
+			return
+		}
+		current = &settings.GlobalSwitch{}
+	}
+	setting := r.globalSwitchModelToSetting(ctx, &model, current, diags)
+	if diags.HasError() {
+		return
+	}
+	if err := r.client.UpdateSetting(ctx, site, setting); err != nil {
+		diags.AddError("Error "+verb+" Global Switch Setting", err.Error())
+	}
+}
+
+// globalSwitchModelToSetting overlays the user-set fields onto the current remote setting (base)
+// so every other field keeps its remote value across the write.
+func (r *settingResource) globalSwitchModelToSetting(
+	ctx context.Context,
+	model *settingGlobalSwitchModel,
+	base *settings.GlobalSwitch,
+	diags *diag.Diagnostics,
+) *settings.GlobalSwitch {
+	setting := base
+	known := func(v attr.Value) bool { return !v.IsNull() && !v.IsUnknown() }
+	if known(model.DHCPSnoop) {
+		setting.DHCPSnoop = model.DHCPSnoop.ValueBool()
+	}
+	if known(model.Dot1XPortctrlEnabled) {
+		setting.Dot1XPortctrlEnabled = model.Dot1XPortctrlEnabled.ValueBool()
+	}
+	if known(model.Dot1XFallbackNetworkID) {
+		setting.Dot1XFallbackNetworkID = model.Dot1XFallbackNetworkID.ValueString()
+	}
+	if known(model.RADIUSProfileID) {
+		setting.RADIUSProfileID = model.RADIUSProfileID.ValueString()
+	}
+	if known(model.FlowctrlEnabled) {
+		setting.FlowctrlEnabled = model.FlowctrlEnabled.ValueBool()
+	}
+	if known(model.JumboframeEnabled) {
+		setting.JumboframeEnabled = model.JumboframeEnabled.ValueBool()
+	}
+	if known(model.StpVersion) {
+		setting.StpVersion = model.StpVersion.ValueString()
+	}
+	if known(model.AutoStpEdgeDetectionEnabled) {
+		v := model.AutoStpEdgeDetectionEnabled.ValueBool()
+		setting.AutoStpEdgeDetectionEnabled = &v
+	}
+	if known(model.LinkDebounce) {
+		v := model.LinkDebounce.ValueInt64()
+		setting.LinkDebounce = &v
+	}
+	if known(model.PoeStagingDelayMsec) {
+		v := model.PoeStagingDelayMsec.ValueInt64()
+		setting.PoeStagingDelayMsec = &v
+	}
+	if known(model.SwitchExclusions) {
+		var macs []string
+		diags.Append(model.SwitchExclusions.ElementsAs(ctx, &macs, false)...)
+		setting.SwitchExclusions = macs
+	}
+	return setting
+}
+
+func (r *settingResource) globalSwitchSettingToModel(
+	ctx context.Context,
+	setting *settings.GlobalSwitch,
+	diags *diag.Diagnostics,
+) *settingGlobalSwitchModel {
+	model := &settingGlobalSwitchModel{
+		DHCPSnoop:                   types.BoolValue(setting.DHCPSnoop),
+		Dot1XPortctrlEnabled:        types.BoolValue(setting.Dot1XPortctrlEnabled),
+		Dot1XFallbackNetworkID:      types.StringValue(setting.Dot1XFallbackNetworkID),
+		RADIUSProfileID:             types.StringValue(setting.RADIUSProfileID),
+		FlowctrlEnabled:             types.BoolValue(setting.FlowctrlEnabled),
+		JumboframeEnabled:           types.BoolValue(setting.JumboframeEnabled),
+		StpVersion:                  types.StringValue(setting.StpVersion),
+		AutoStpEdgeDetectionEnabled: types.BoolPointerValue(setting.AutoStpEdgeDetectionEnabled),
+		LinkDebounce:                types.Int64PointerValue(setting.LinkDebounce),
+		PoeStagingDelayMsec:         types.Int64PointerValue(setting.PoeStagingDelayMsec),
+	}
+	macs, d := types.ListValueFrom(ctx, types.StringType, setting.SwitchExclusions)
+	diags.Append(d...)
+	model.SwitchExclusions = macs
 	return model
 }
 
