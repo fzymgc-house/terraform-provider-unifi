@@ -612,6 +612,9 @@ func (r *networkResource) Schema(
 					},
 				},
 			},
+			// The computed children below keep a prior non-null value only. When
+			// dhcp_server is new, their prior value is null and must stay unknown:
+			// the controller derives start and stop from the subnet on the write.
 			"dhcp_server": schema.SingleNestedAttribute{
 				MarkdownDescription: "DHCP server configuration.",
 				Optional:            true,
@@ -632,7 +635,7 @@ func (r *networkResource) Schema(
 								Optional:            true,
 								Computed:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.UseStateForUnknown(),
+									stringplanmodifier.UseNonNullStateForUnknown(),
 								},
 							},
 							"filename": schema.StringAttribute{
@@ -640,12 +643,12 @@ func (r *networkResource) Schema(
 								Optional:            true,
 								Computed:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.UseStateForUnknown(),
+									stringplanmodifier.UseNonNullStateForUnknown(),
 								},
 							},
 						},
 						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
+							objectplanmodifier.UseNonNullStateForUnknown(),
 						},
 					},
 					"enabled": schema.BoolAttribute{
@@ -662,7 +665,7 @@ func (r *networkResource) Schema(
 							validators.IPv4Validator(),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							stringplanmodifier.UseNonNullStateForUnknown(),
 						},
 					},
 					"stop": schema.StringAttribute{
@@ -673,7 +676,7 @@ func (r *networkResource) Schema(
 							validators.IPv4Validator(),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							stringplanmodifier.UseNonNullStateForUnknown(),
 						},
 					},
 					"gateway_enabled": schema.BoolAttribute{
