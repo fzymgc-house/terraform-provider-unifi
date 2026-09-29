@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -490,6 +491,9 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Cron expression controlling when the speed test runs (e.g. `0 * * * *`).",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -548,12 +552,18 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(1, 100)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"idle_timeout": schema.Int64Attribute{
 						MarkdownDescription: "Seconds of inactivity before the display turns off (10-3600).",
 						Optional:            true,
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(10, 3600)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"sync": schema.BoolAttribute{
 						MarkdownDescription: "Sync display settings across devices.",
@@ -599,6 +609,9 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators: []validator.String{
 							stringvalidator.OneOf("auto", "manual"),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"ntp_server_1": schema.StringAttribute{
@@ -653,12 +666,18 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Remote syslog server IP address.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"port": schema.Int64Attribute{
 						MarkdownDescription: "Remote syslog server port (1-65535).",
 						Optional:            true,
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(1, 65535)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"contents": schema.ListAttribute{
 						MarkdownDescription: "Logged facilities (e.g. `device`, `client`, `firewall_default_policy`, `triggers`, `updates`, `admin_activity`, `critical`, `security_detections`, `vpn`).",
@@ -703,12 +722,18 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Netconsole host.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"netconsole_port": schema.Int64Attribute{
 						MarkdownDescription: "Netconsole port (1-65535).",
 						Optional:            true,
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(1, 65535)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -726,6 +751,9 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators: []validator.String{
 							stringvalidator.OneOf("off", "auto", "manual", "custom"),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"server_names": schema.ListAttribute{
@@ -777,6 +805,9 @@ func (r *settingResource) Schema(
 						Validators: []validator.String{
 							stringvalidator.OneOf("ids", "ips", "ipsInline", "disabled"),
 						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"enabled_categories": schema.ListAttribute{
 						MarkdownDescription: "Emerging Threats ruleset categories to enable (e.g. \"emerging-malware\", \"tor\", \"phishing\").",
@@ -800,6 +831,9 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Enable honeypot to detect internal port scans.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"honeypot": schema.ListNestedAttribute{
 						MarkdownDescription: "Honeypot IP addresses per network.",
@@ -829,16 +863,25 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Block BitTorrent traffic.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"content_filtering_blocking_page_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Show a blocking page when content filtering blocks a request.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"memory_optimized": schema.BoolAttribute{
 						MarkdownDescription: "Use memory-optimized IPS ruleset (reduced rule set for low-memory devices).",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"advanced_filtering_preference": schema.StringAttribute{
 						MarkdownDescription: "Advanced filtering mode: manual or disabled.",
@@ -846,6 +889,9 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators: []validator.String{
 							stringvalidator.OneOf("manual", "disabled"),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"suppression_alerts": schema.ListNestedAttribute{
@@ -957,47 +1003,74 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Automatically upgrade device firmware.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"ssh_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable SSH authentication.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"auto_upgrade_hour": schema.Int64Attribute{
 						MarkdownDescription: "Hour of day (0-23) for automatic firmware upgrades.",
 						Optional:            true,
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(0, 23)},
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"advanced_feature_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable advanced features.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"debug_tools_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable debug tools.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"direct_connect_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable Direct Connect (remote access).",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"unifi_idp_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable the UniFi Identity Provider.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"wifiman_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable WiFiman.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"ssh_username": schema.StringAttribute{
 						MarkdownDescription: "SSH username for device access.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"ssh_password": schema.StringAttribute{
 						MarkdownDescription: "SSH password for device access. Sensitive — the controller " +
@@ -1009,11 +1082,17 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Allow SSH password authentication (in addition to keys).",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"ssh_keys": schema.ListNestedAttribute{
 						MarkdownDescription: "SSH keys.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 						NestedObject: schema.NestedAttributeObject{
 							Attributes: map[string]schema.Attribute{
 								"name": schema.StringAttribute{
@@ -1043,11 +1122,15 @@ func (r *settingResource) Schema(
 				MarkdownDescription: "RADIUS settings.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"accounting_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable RADIUS accounting.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"acct_port": schema.Int64Attribute{
 						MarkdownDescription: "RADIUS accounting port.",
@@ -1056,6 +1139,7 @@ func (r *settingResource) Schema(
 						Validators: []validator.Int64{
 							int64validator.Between(1, 65535),
 						},
+						PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 					},
 					"auth_port": schema.Int64Attribute{
 						MarkdownDescription: "RADIUS authentication port.",
@@ -1064,6 +1148,7 @@ func (r *settingResource) Schema(
 						Validators: []validator.Int64{
 							int64validator.Between(1, 65535),
 						},
+						PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 					},
 					"interim_update_interval": schema.StringAttribute{
 						MarkdownDescription: "Interim update interval, as a Go duration string " +
@@ -1071,6 +1156,9 @@ func (r *settingResource) Schema(
 						CustomType: timetypes.GoDurationType{},
 						Optional:   true,
 						Computed:   true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"secret": schema.StringAttribute{
 						MarkdownDescription: "RADIUS shared secret.",
@@ -1091,11 +1179,15 @@ func (r *settingResource) Schema(
 				MarkdownDescription: "USG settings.",
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"broadcast_ping": schema.BoolAttribute{
 						MarkdownDescription: "Enable broadcast ping.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"dns_verification": schema.SingleNestedAttribute{
 						MarkdownDescription: "DNS verification settings.",
@@ -1128,199 +1220,309 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Enable FTP module.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"geo_ip_filtering_block": schema.StringAttribute{
 						MarkdownDescription: "Geo IP filtering action: block or allow.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"geo_ip_filtering_countries": schema.StringAttribute{
 						MarkdownDescription: "Comma-separated list of country codes for geo IP filtering.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"geo_ip_filtering_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable geo IP filtering.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"geo_ip_filtering_traffic_direction": schema.StringAttribute{
 						MarkdownDescription: "Geo IP filtering traffic direction: both, ingress, or egress.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"gre_module": schema.BoolAttribute{
 						MarkdownDescription: "Enable GRE module.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"h323_module": schema.BoolAttribute{
 						MarkdownDescription: "Enable H.323 module.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"icmp_timeout": schema.StringAttribute{
 						MarkdownDescription: "ICMP connection timeout, as a Go duration string (e.g. `30s`, `1m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"mss_clamp": schema.StringAttribute{
 						MarkdownDescription: "MSS clamping mode: auto, custom, or disabled.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"offload_accounting": schema.BoolAttribute{
 						MarkdownDescription: "Enable hardware offload for accounting.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"offload_l2_blocking": schema.BoolAttribute{
 						MarkdownDescription: "Enable hardware offload for L2 blocking.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"offload_sch": schema.BoolAttribute{
 						MarkdownDescription: "Enable hardware offload for scheduling.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"other_timeout": schema.StringAttribute{
 						MarkdownDescription: "Other connections timeout, as a Go duration string (e.g. `600s`, `10m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"pptp_module": schema.BoolAttribute{
 						MarkdownDescription: "Enable PPTP module.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"receive_redirects": schema.BoolAttribute{
 						MarkdownDescription: "Accept ICMP redirects.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"send_redirects": schema.BoolAttribute{
 						MarkdownDescription: "Send ICMP redirects.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"sip_module": schema.BoolAttribute{
 						MarkdownDescription: "Enable SIP module.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"syn_cookies": schema.BoolAttribute{
 						MarkdownDescription: "Enable SYN cookies.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_close_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP close timeout, as a Go duration string (e.g. `10s`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_close_wait_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP close wait timeout, as a Go duration string (e.g. `60s`, `1m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_established_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP established connection timeout, as a Go duration string (e.g. `7440s`, `2h4m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_fin_wait_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP fin wait timeout, as a Go duration string (e.g. `120s`, `2m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_last_ack_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP last ACK timeout, as a Go duration string (e.g. `30s`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_syn_recv_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP SYN received timeout, as a Go duration string (e.g. `60s`, `1m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_syn_sent_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP SYN sent timeout, as a Go duration string (e.g. `120s`, `2m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tcp_time_wait_timeout": schema.StringAttribute{
 						MarkdownDescription: "TCP time wait timeout, as a Go duration string (e.g. `120s`, `2m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"tftp_module": schema.BoolAttribute{
 						MarkdownDescription: "Enable TFTP module.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"timeout_setting_preference": schema.StringAttribute{
 						MarkdownDescription: "Timeout setting preference: auto or manual.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"udp_other_timeout": schema.StringAttribute{
 						MarkdownDescription: "UDP other timeout, as a Go duration string (e.g. `30s`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"udp_stream_timeout": schema.StringAttribute{
 						MarkdownDescription: "UDP stream timeout, as a Go duration string (e.g. `180s`, `3m`).",
 						CustomType:          timetypes.GoDurationType{},
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"unbind_wan_monitors": schema.BoolAttribute{
 						MarkdownDescription: "Unbind WAN monitors.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"upnp_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable UPnP.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"upnp_nat_pmp_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Enable UPnP NAT-PMP.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"upnp_secure_mode": schema.BoolAttribute{
 						MarkdownDescription: "Enable UPnP secure mode.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"upnp_wan_interface": schema.StringAttribute{
 						MarkdownDescription: "UPnP WAN interface (e.g., WAN, WAN2).",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
 			"igmp_snooping": schema.SingleNestedAttribute{
 				MarkdownDescription: "Site-level IGMP snooping setting. On UniFi Network 10.3.x+ the effective IGMP snooping toggle lives here rather than on each network. Advanced querier/flood options configured in the UI are preserved across updates.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"enabled": schema.BoolAttribute{
 						MarkdownDescription: "Whether IGMP snooping is enabled for the site.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"network_ids": schema.ListAttribute{
 						MarkdownDescription: "IDs of the networks IGMP snooping applies to.",
@@ -1336,6 +1538,8 @@ func (r *settingResource) Schema(
 			"global_switch": schema.SingleNestedAttribute{
 				MarkdownDescription: "Site-wide switch settings (the `global_switch` setting). `dhcp_snoop` is the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on. Fields left unset keep the controller's current value across updates.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 				Attributes: map[string]schema.Attribute{
 					"dhcp_snoop": schema.BoolAttribute{
 						MarkdownDescription: "Whether DHCP snooping is enabled on every switch.",
@@ -1783,7 +1987,7 @@ func (r *settingResource) Create(
 	}
 
 	// Read back the settings
-	r.readSettings(ctx, site, &data, &resp.Diagnostics)
+	r.readSettings(ctx, site, &data, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -1834,9 +2038,18 @@ func (r *settingResource) Read(
 		site = r.client.Site
 	}
 
-	r.readSettings(ctx, site, &data, &resp.Diagnostics)
+	readAll := false
+	if req.Private != nil {
+		marker, d := req.Private.GetKey(ctx, importAllSectionsKey)
+		resp.Diagnostics.Append(d...)
+		readAll = len(marker) > 0
+	}
+	r.readSettings(ctx, site, &data, readAll, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	if readAll && resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importAllSectionsKey, nil)...)
 	}
 
 	// Terraform rejects any modification of a stored identity, so pass a
@@ -2116,7 +2329,7 @@ func (r *settingResource) Update(
 	}
 
 	// Read back the settings
-	r.readSettings(ctx, site, &plan, &resp.Diagnostics)
+	r.readSettings(ctx, site, &plan, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -2139,11 +2352,20 @@ func (r *settingResource) Delete(
 	// Just remove from state
 }
 
+// importAllSectionsKey marks, in private state, that the next Read follows an import and has
+// to read every section. The resource otherwise reads only the sections already in state, and
+// an import puts none there, so a configuration that states the live values planned every
+// section as an addition.
+const importAllSectionsKey = "import_all_sections"
+
 func (r *settingResource) ImportState(
 	ctx context.Context,
 	req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse,
 ) {
+	if resp.Private != nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, importAllSectionsKey, []byte("1"))...)
+	}
 	// Import by resource identity (import block with identity, Terraform 1.12+).
 	if req.ID == "" {
 		var identity settingIdentityModel
@@ -2173,12 +2395,55 @@ func (r *settingResource) ImportState(
 	resp.Diagnostics.Append(resp.Identity.SetAttribute(ctx, path.Root("site"), req.ID)...)
 }
 
+// knownPlan sets every null or unknown Bool, String, Int64 and GoDuration field of a section
+// model to a known zero value. The plan-aware conversions read a field from the controller only
+// when the plan holds it, and an import has no plan, so the import read hands them this model.
+// List fields stay as they are.
+func knownPlan(model any) {
+	v := reflect.ValueOf(model).Elem()
+	for i := range v.NumField() {
+		f := v.Field(i)
+		val, ok := f.Interface().(attr.Value)
+		if !ok || (!val.IsNull() && !val.IsUnknown()) {
+			continue
+		}
+		switch f.Interface().(type) {
+		case types.Bool:
+			f.Set(reflect.ValueOf(types.BoolValue(false)))
+		case types.String:
+			f.Set(reflect.ValueOf(types.StringValue("")))
+		case types.Int64:
+			f.Set(reflect.ValueOf(types.Int64Value(0)))
+		case timetypes.GoDuration:
+			f.Set(reflect.ValueOf(timetypes.NewGoDurationValue(0)))
+		}
+	}
+}
+
 func (r *settingResource) readSettings(
 	ctx context.Context,
 	site string,
 	data *settingResourceModel,
+	readAll bool,
 	diags *diag.Diagnostics,
 ) {
+	// After an import every section the controller has is read. A controller stores only the
+	// sections its features use (a console without a gateway has no radius or usg section), so
+	// the list of present keys decides which reads happen, and an absent section stays null.
+	present := map[string]bool{}
+	if readAll {
+		raw, err := r.client.ListSettings(ctx, site)
+		if err != nil {
+			diags.AddError("Error Listing Settings", err.Error())
+			return
+		}
+		for i := range raw {
+			present[raw[i].GetKey()] = true
+		}
+	}
+	readSection := func(key string, state attr.Value) bool {
+		return (readAll && present[key]) || (!state.IsNull() && !state.IsUnknown())
+	}
 	// Set the ID to the site since settings are site-level
 	data.ID = types.StringValue(site)
 	data.Site = types.StringValue(site)
@@ -2186,7 +2451,7 @@ func (r *settingResource) readSettings(
 	// Only read settings that were configured in the plan, set others to null
 
 	// Auto speedtest settings
-	if !data.AutoSpeedtest.IsNull() && !data.AutoSpeedtest.IsUnknown() {
+	if readSection("auto_speedtest", data.AutoSpeedtest) {
 		_, asSetting, err := ui.GetSetting[*settings.AutoSpeedtest](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Auto Speedtest Setting", err.Error())
@@ -2205,7 +2470,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Country settings
-	if !data.Country.IsNull() && !data.Country.IsUnknown() {
+	if readSection("country", data.Country) {
 		_, s, err := ui.GetSetting[*settings.Country](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Country Setting", err.Error())
@@ -2222,7 +2487,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// DPI settings
-	if !data.Dpi.IsNull() && !data.Dpi.IsUnknown() {
+	if readSection("dpi", data.Dpi) {
 		_, s, err := ui.GetSetting[*settings.Dpi](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading DPI Setting", err.Error())
@@ -2239,7 +2504,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// LCM settings
-	if !data.Lcm.IsNull() && !data.Lcm.IsUnknown() {
+	if readSection("lcm", data.Lcm) {
 		_, s, err := ui.GetSetting[*settings.Lcm](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading LCM Setting", err.Error())
@@ -2256,7 +2521,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Network optimization settings
-	if !data.NetworkOpt.IsNull() && !data.NetworkOpt.IsUnknown() {
+	if readSection("network_optimization", data.NetworkOpt) {
 		_, s, err := ui.GetSetting[*settings.NetworkOptimization](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Network Optimization Setting", err.Error())
@@ -2275,7 +2540,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// NTP settings
-	if !data.Ntp.IsNull() && !data.Ntp.IsUnknown() {
+	if readSection("ntp", data.Ntp) {
 		_, s, err := ui.GetSetting[*settings.Ntp](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading NTP Setting", err.Error())
@@ -2292,7 +2557,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Syslog settings
-	if !data.Syslog.IsNull() && !data.Syslog.IsUnknown() {
+	if readSection("rsyslogd", data.Syslog) {
 		_, s, err := ui.GetSetting[*settings.Rsyslogd](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Syslog Setting", err.Error())
@@ -2311,11 +2576,22 @@ func (r *settingResource) readSettings(
 	}
 
 	// DoH settings
-	if !data.Doh.IsNull() && !data.Doh.IsUnknown() {
+	if readSection("doh", data.Doh) {
 		var planDoh settingDohModel
-		diags.Append(data.Doh.As(ctx, &planDoh, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Doh.As(
+				ctx,
+				&planDoh,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
+		}
+		if readAll {
+			knownPlan(&planDoh)
 		}
 
 		_, dohSetting, err := ui.GetSetting[*settings.Doh](r.client.ApiClient, ctx, site)
@@ -2336,11 +2612,22 @@ func (r *settingResource) readSettings(
 	}
 
 	// IPS settings
-	if !data.Ips.IsNull() && !data.Ips.IsUnknown() {
+	if readSection("ips", data.Ips) {
 		var planIps settingIpsModel
-		diags.Append(data.Ips.As(ctx, &planIps, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Ips.As(
+				ctx,
+				&planIps,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
+		}
+		if readAll {
+			knownPlan(&planIps)
 		}
 
 		_, ipsSetting, err := ui.GetSetting[*settings.Ips](r.client.ApiClient, ctx, site)
@@ -2381,12 +2668,24 @@ func (r *settingResource) readSettings(
 	}
 
 	// Mgmt settings
-	if !data.Mgmt.IsNull() && !data.Mgmt.IsUnknown() {
+	if readSection("mgmt", data.Mgmt) {
 		// Get the current plan/state values
 		var planMgmt settingMgmtModel
-		diags.Append(data.Mgmt.As(ctx, &planMgmt, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Mgmt.As(
+				ctx,
+				&planMgmt,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
+		}
+		if readAll {
+			knownPlan(&planMgmt)
+			planMgmt.SSHPassword = types.StringNull()
 		}
 
 		_, mgmtSetting, err := ui.GetSetting[*settings.Mgmt](r.client.ApiClient, ctx, site)
@@ -2407,12 +2706,23 @@ func (r *settingResource) readSettings(
 	}
 
 	// Radius settings
-	if !data.Radius.IsNull() && !data.Radius.IsUnknown() {
+	if readSection("radius", data.Radius) {
 		// Get the current plan/state values
 		var planRadius settingRadiusModel
-		diags.Append(data.Radius.As(ctx, &planRadius, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.Radius.As(
+				ctx,
+				&planRadius,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
+		}
+		if readAll {
+			knownPlan(&planRadius)
 		}
 
 		_, radiusSetting, err := ui.GetSetting[*settings.Radius](r.client.ApiClient, ctx, site)
@@ -2445,12 +2755,23 @@ func (r *settingResource) readSettings(
 	}
 
 	// USG settings
-	if !data.USG.IsNull() && !data.USG.IsUnknown() {
+	if readSection("usg", data.USG) {
 		// Get the current plan/state values
 		var planUSG settingUSGModel
-		diags.Append(data.USG.As(ctx, &planUSG, basetypes.ObjectAsOptions{})...)
+		diags.Append(
+			data.USG.As(
+				ctx,
+				&planUSG,
+				basetypes.ObjectAsOptions{
+					UnhandledNullAsEmpty:    true,
+					UnhandledUnknownAsEmpty: true,
+				},
+			)...)
 		if diags.HasError() {
 			return
+		}
+		if readAll {
+			knownPlan(&planUSG)
 		}
 
 		_, usgSetting, err := ui.GetSetting[*settings.Usg](r.client.ApiClient, ctx, site)
@@ -2576,7 +2897,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// IGMP snooping (site-level)
-	if !data.IgmpSnooping.IsNull() && !data.IgmpSnooping.IsUnknown() {
+	if readSection("igmp_snooping", data.IgmpSnooping) {
 		_, igmpSetting, err := ui.GetSetting[*settings.IgmpSnooping](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading IGMP Snooping Setting", err.Error())
@@ -2594,7 +2915,7 @@ func (r *settingResource) readSettings(
 	}
 
 	// Global switch (site-level)
-	if !data.GlobalSwitch.IsNull() && !data.GlobalSwitch.IsUnknown() {
+	if readSection("global_switch", data.GlobalSwitch) {
 		_, gsSetting, err := ui.GetSetting[*settings.GlobalSwitch](r.client.ApiClient, ctx, site)
 		if err != nil {
 			diags.AddError("Error Reading Global Switch Setting", err.Error())
