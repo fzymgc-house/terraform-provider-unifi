@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/hwtypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
@@ -636,19 +637,96 @@ func (r *devicePortsResource) refresh(
 	return true, diags
 }
 
+// Bounds for waiting on the controller after a write. A write that removes a
+// link aggregation group makes the controller re-provision the switch, and
+// stat/device serves the previous port_overrides for a few seconds.
+var (
+	settleAttempts = 10
+	settleInterval = 2 * time.Second
+)
+
+// refreshAfterWrite reads the device until its ports match every known value
+// in the plan, or the attempts run out. The last read is kept either way, so a
+// value the controller really rejected still fails the apply.
 func (r *devicePortsResource) refreshAfterWrite(
 	ctx context.Context,
 	site string,
 	m *devicePortsResourceModel,
 ) diag.Diagnostics {
-	found, diags := r.refresh(ctx, site, m)
-	if !found && !diags.HasError() {
-		diags.AddError(
-			"Unable to read device",
-			fmt.Sprintf("device %s disappeared after the write", m.MAC.ValueString()),
-		)
+	planned := m.Ports
+	return settle(ctx, planned, func() (types.Map, diag.Diagnostics) {
+		found, diags := r.refresh(ctx, site, m)
+		if !found && !diags.HasError() {
+			diags.AddError(
+				"Unable to read device",
+				fmt.Sprintf("device %s disappeared after the write", m.MAC.ValueString()),
+			)
+		}
+		return m.Ports, diags
+	})
+}
+
+// settle calls read until the ports it returns match planned, read fails, or
+// settleAttempts reads are done.
+func settle(
+	ctx context.Context,
+	planned types.Map,
+	read func() (types.Map, diag.Diagnostics),
+) diag.Diagnostics {
+	for attempt := 1; ; attempt++ {
+		got, diags := read()
+		if diags.HasError() || portsMatchPlan(planned, got) || attempt >= settleAttempts {
+			return diags
+		}
+		select {
+		case <-ctx.Done():
+			return diags
+		case <-time.After(settleInterval):
+		}
 	}
-	return diags
+}
+
+// portsMatchPlan reports whether got holds the same ports as planned and every
+// known planned attribute. An unknown planned attribute matches any value, as
+// Terraform's own consistency check allows.
+func portsMatchPlan(planned, got types.Map) bool {
+	if planned.IsUnknown() {
+		return true
+	}
+	if planned.IsNull() || got.IsNull() || got.IsUnknown() {
+		return planned.IsNull() == got.IsNull()
+	}
+	p, g := planned.Elements(), got.Elements()
+	if len(p) != len(g) {
+		return false
+	}
+	for key, pv := range p {
+		gv, ok := g[key]
+		if !ok {
+			return false
+		}
+		po, pok := pv.(types.Object)
+		gobj, gok := gv.(types.Object)
+		if !pok || !gok || po.IsUnknown() {
+			continue
+		}
+		if po.IsNull() || gobj.IsNull() {
+			if po.IsNull() != gobj.IsNull() {
+				return false
+			}
+			continue
+		}
+		gattrs := gobj.Attributes()
+		for name, want := range po.Attributes() {
+			if want.IsUnknown() {
+				continue
+			}
+			if !want.Equal(gattrs[name]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 var portIndexKey = regexp.MustCompile(`^[1-9][0-9]*$`)
