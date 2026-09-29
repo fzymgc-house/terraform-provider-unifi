@@ -43,7 +43,7 @@ resource "unifi_port_profile" "poe_disabled" {
 
 - `autoneg` (Boolean) Enable link auto negotiation for the port profile. When set to `true` this overrides `speed`.
 - `dot1x_ctrl` (String) The type of 802.1X control to use. Can be `auto`, `force_authorized`, `force_unauthorized`, `mac_based` or `multi_host`.
-- `dot1x_idle_timeout` (String) The idle timeout to use when using MAC Based 802.1X control, as a Go duration string (e.g. `5m`, `300s`). Defaults to `5m0s`.
+- `dot1x_idle_timeout` (String) The idle timeout to use when using MAC Based 802.1X control, as a Go duration string (e.g. `5m`, `300s`). Unset means the controller's own default: the value stays off the wire and is read back from the controller, so a profile the controller stores without the key imports with no change.
 - `egress_rate_limit_kbps` (Number) The egress rate limit, in kpbs, for the port profile. Can be between `64` and `9999999`.
 - `egress_rate_limit_kbps_enabled` (Boolean) Enable egress rate limiting for the port profile.
 - `excluded_networkconf_ids` (Set of String) The IDs of networks excluded from the port profile (used when `tagged_vlan_mgmt` is `custom`). Computed from the controller when not set.
