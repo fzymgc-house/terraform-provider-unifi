@@ -536,15 +536,46 @@ func encodePortValue(
 // portOverridesToState converts the device's port_overrides into the ports map:
 // one element per entry, keyed by port index, with every modelled key read from
 // the controller and an absent key read as null.
+// lagMembers returns the indices of every port that is a member, and not the lead, of a link
+// aggregation group some entry declares. The controller stores the group on its lead and ignores
+// a member's own entry, and the resource forbids declaring one, so the read leaves them out.
+func lagMembers(entries []portOverrideEntry) map[int64]bool {
+	members := map[int64]bool{}
+	for _, entry := range entries {
+		lead, err := entry.index()
+		if err != nil {
+			continue
+		}
+		raw, ok := entry["aggregate_members"]
+		if !ok {
+			continue
+		}
+		var idxs []json.Number
+		if err := json.Unmarshal(raw, &idxs); err != nil {
+			continue
+		}
+		for _, n := range idxs {
+			if idx, err := n.Int64(); err == nil && idx != lead {
+				members[idx] = true
+			}
+		}
+	}
+	return members
+}
+
 func portOverridesToState(entries []portOverrideEntry) (types.Map, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	attrTypes := devicePortAttrTypes()
 	elemType := types.ObjectType{AttrTypes: attrTypes}
 	ports := make(map[string]attr.Value, len(entries))
+	members := lagMembers(entries)
 	for _, entry := range entries {
 		idx, err := entry.index()
 		if err != nil {
 			diags.AddError("Unexpected port_overrides entry", err.Error())
+			continue
+		}
+		if members[idx] {
 			continue
 		}
 		values := make(map[string]attr.Value, len(portFields))
