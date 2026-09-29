@@ -21,9 +21,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -492,7 +489,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 				},
@@ -553,7 +550,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(1, 100)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"idle_timeout": schema.Int64Attribute{
@@ -562,7 +559,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(10, 3600)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"sync": schema.BoolAttribute{
@@ -611,7 +608,7 @@ func (r *settingResource) Schema(
 							stringvalidator.OneOf("auto", "manual"),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ntp_server_1": schema.StringAttribute{
@@ -619,7 +616,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ntp_server_2": schema.StringAttribute{
@@ -627,7 +624,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ntp_server_3": schema.StringAttribute{
@@ -635,7 +632,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ntp_server_4": schema.StringAttribute{
@@ -643,7 +640,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 				},
@@ -667,7 +664,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"port": schema.Int64Attribute{
@@ -676,7 +673,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(1, 65535)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"contents": schema.ListAttribute{
@@ -685,7 +682,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						ElementType:         types.StringType,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"log_all_contents": schema.BoolAttribute{
@@ -723,7 +720,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"netconsole_port": schema.Int64Attribute{
@@ -732,7 +729,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(1, 65535)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 				},
@@ -753,7 +750,7 @@ func (r *settingResource) Schema(
 							stringvalidator.OneOf("off", "auto", "manual", "custom"),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"server_names": schema.ListAttribute{
@@ -762,7 +759,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						ElementType:         types.StringType,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"custom_servers": schema.ListNestedAttribute{
@@ -806,7 +803,7 @@ func (r *settingResource) Schema(
 							stringvalidator.OneOf("ids", "ips", "ipsInline", "disabled"),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"enabled_categories": schema.ListAttribute{
@@ -815,7 +812,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						ElementType:         types.StringType,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"enabled_networks": schema.ListAttribute{
@@ -824,7 +821,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						ElementType:         types.StringType,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"honeypot_enabled": schema.BoolAttribute{
@@ -832,7 +829,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"honeypot": schema.ListNestedAttribute{
@@ -864,7 +861,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"content_filtering_blocking_page_enabled": schema.BoolAttribute{
@@ -872,7 +869,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"memory_optimized": schema.BoolAttribute{
@@ -880,7 +877,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"advanced_filtering_preference": schema.StringAttribute{
@@ -891,7 +888,7 @@ func (r *settingResource) Schema(
 							stringvalidator.OneOf("manual", "disabled"),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"suppression_alerts": schema.ListNestedAttribute{
@@ -1004,7 +1001,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ssh_enabled": schema.BoolAttribute{
@@ -1012,7 +1009,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"auto_upgrade_hour": schema.Int64Attribute{
@@ -1021,7 +1018,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.Between(0, 23)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"advanced_feature_enabled": schema.BoolAttribute{
@@ -1029,7 +1026,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"debug_tools_enabled": schema.BoolAttribute{
@@ -1037,7 +1034,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"direct_connect_enabled": schema.BoolAttribute{
@@ -1045,7 +1042,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"unifi_idp_enabled": schema.BoolAttribute{
@@ -1053,7 +1050,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"wifiman_enabled": schema.BoolAttribute{
@@ -1061,7 +1058,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ssh_username": schema.StringAttribute{
@@ -1069,7 +1066,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ssh_password": schema.StringAttribute{
@@ -1083,7 +1080,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"ssh_keys": schema.ListNestedAttribute{
@@ -1091,7 +1088,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 						NestedObject: schema.NestedAttributeObject{
 							Attributes: map[string]schema.Attribute{
@@ -1129,7 +1126,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"acct_port": schema.Int64Attribute{
@@ -1139,7 +1136,7 @@ func (r *settingResource) Schema(
 						Validators: []validator.Int64{
 							int64validator.Between(1, 65535),
 						},
-						PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.Int64{useStateUnlessParentNew()},
 					},
 					"auth_port": schema.Int64Attribute{
 						MarkdownDescription: "RADIUS authentication port.",
@@ -1148,7 +1145,7 @@ func (r *settingResource) Schema(
 						Validators: []validator.Int64{
 							int64validator.Between(1, 65535),
 						},
-						PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.Int64{useStateUnlessParentNew()},
 					},
 					"interim_update_interval": schema.StringAttribute{
 						MarkdownDescription: "Interim update interval, as a Go duration string " +
@@ -1157,7 +1154,7 @@ func (r *settingResource) Schema(
 						Optional:   true,
 						Computed:   true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"secret": schema.StringAttribute{
@@ -1186,7 +1183,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"dns_verification": schema.SingleNestedAttribute{
@@ -1221,7 +1218,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"geo_ip_filtering_block": schema.StringAttribute{
@@ -1229,7 +1226,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"geo_ip_filtering_countries": schema.StringAttribute{
@@ -1237,7 +1234,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"geo_ip_filtering_enabled": schema.BoolAttribute{
@@ -1245,7 +1242,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"geo_ip_filtering_traffic_direction": schema.StringAttribute{
@@ -1253,7 +1250,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"gre_module": schema.BoolAttribute{
@@ -1261,7 +1258,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"h323_module": schema.BoolAttribute{
@@ -1269,7 +1266,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"icmp_timeout": schema.StringAttribute{
@@ -1278,7 +1275,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"mss_clamp": schema.StringAttribute{
@@ -1286,7 +1283,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"offload_accounting": schema.BoolAttribute{
@@ -1294,7 +1291,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"offload_l2_blocking": schema.BoolAttribute{
@@ -1302,7 +1299,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"offload_sch": schema.BoolAttribute{
@@ -1310,7 +1307,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"other_timeout": schema.StringAttribute{
@@ -1319,7 +1316,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"pptp_module": schema.BoolAttribute{
@@ -1327,7 +1324,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"receive_redirects": schema.BoolAttribute{
@@ -1335,7 +1332,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"send_redirects": schema.BoolAttribute{
@@ -1343,7 +1340,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"sip_module": schema.BoolAttribute{
@@ -1351,7 +1348,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"syn_cookies": schema.BoolAttribute{
@@ -1359,7 +1356,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_close_timeout": schema.StringAttribute{
@@ -1368,7 +1365,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_close_wait_timeout": schema.StringAttribute{
@@ -1377,7 +1374,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_established_timeout": schema.StringAttribute{
@@ -1386,7 +1383,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_fin_wait_timeout": schema.StringAttribute{
@@ -1395,7 +1392,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_last_ack_timeout": schema.StringAttribute{
@@ -1404,7 +1401,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_syn_recv_timeout": schema.StringAttribute{
@@ -1413,7 +1410,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_syn_sent_timeout": schema.StringAttribute{
@@ -1422,7 +1419,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tcp_time_wait_timeout": schema.StringAttribute{
@@ -1431,7 +1428,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"tftp_module": schema.BoolAttribute{
@@ -1439,7 +1436,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"timeout_setting_preference": schema.StringAttribute{
@@ -1447,7 +1444,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"udp_other_timeout": schema.StringAttribute{
@@ -1456,7 +1453,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"udp_stream_timeout": schema.StringAttribute{
@@ -1465,7 +1462,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"unbind_wan_monitors": schema.BoolAttribute{
@@ -1473,7 +1470,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"upnp_enabled": schema.BoolAttribute{
@@ -1481,7 +1478,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"upnp_nat_pmp_enabled": schema.BoolAttribute{
@@ -1489,7 +1486,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"upnp_secure_mode": schema.BoolAttribute{
@@ -1497,7 +1494,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"upnp_wan_interface": schema.StringAttribute{
@@ -1505,7 +1502,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 				},
@@ -1521,7 +1518,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"network_ids": schema.ListAttribute{
@@ -1530,7 +1527,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 				},
@@ -1546,7 +1543,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"dot1x_portctrl_enabled": schema.BoolAttribute{
@@ -1554,7 +1551,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"dot1x_fallback_networkconf_id": schema.StringAttribute{
@@ -1562,7 +1559,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"radiusprofile_id": schema.StringAttribute{
@@ -1570,7 +1567,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"flowctrl_enabled": schema.BoolAttribute{
@@ -1578,7 +1575,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"jumboframe_enabled": schema.BoolAttribute{
@@ -1586,7 +1583,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"stp_version": schema.StringAttribute{
@@ -1597,7 +1594,7 @@ func (r *settingResource) Schema(
 							stringvalidator.OneOf("stp", "rstp", "disabled"),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"auto_stp_edge_detection_enabled": schema.BoolAttribute{
@@ -1605,7 +1602,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"link_debounce": schema.Int64Attribute{
@@ -1614,7 +1611,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.AtLeast(0)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"poe_staging_delay_msec": schema.Int64Attribute{
@@ -1623,7 +1620,7 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						Validators:          []validator.Int64{int64validator.AtLeast(0)},
 						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 					"switch_exclusions": schema.ListAttribute{
@@ -1632,7 +1629,7 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.List{
-							listplanmodifier.UseStateForUnknown(),
+							useStateUnlessParentNew(),
 						},
 					},
 				},
