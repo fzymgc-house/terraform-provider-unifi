@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features
 
+- **`unifi_network`: `ipv6_aliases` is supported.** It holds extra IPv6 addresses on a network, in CIDR notation, such as a ULA gateway address beside a delegated prefix. Earlier releases rejected a non-empty list at plan time, because go-unifi had no field for it. Requires go-unifi with `Network.IPV6Aliases` (fzymgc-house/go-unifi#2).
+
 - **`unifi_setting`: new `global_switch` section.** The site-wide switch settings: `dhcp_snoop` (the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on), `dot1x_portctrl_enabled`, `dot1x_fallback_networkconf_id`, `radiusprofile_id`, `flowctrl_enabled`, `jumboframe_enabled`, `stp_version`, `auto_stp_edge_detection_enabled`, `link_debounce`, `poe_staging_delay_msec` and `switch_exclusions`. The controller replaces the whole section on write, so the provider reads it first and writes every unset field back as it was. Requires go-unifi with the three `GlobalSwitch` fields Network 10.6 stores that the generated struct lacked (fzymgc-house/go-unifi#1).
 
 - **New `unifi_device_ports` resource: one declaration of a device's complete port configuration.**
@@ -23,6 +25,8 @@ All notable changes to this project will be documented in this file.
 - **`unifi_device`: the `port_override` block is deprecated in favour of `unifi_device_ports`.** The block manages only the ports it declares, so it cannot make an import converge, because blocks cannot be Computed. Its update path also marshals go-unifi's typed overrides, which drops the keys listed above from every port. The block keeps working. Do not use it and `unifi_device_ports` on the same device.
 
 ### 🐛 Bug Fixes
+
+- **`unifi_network`: an update keeps the network's firewall zone.** go-unifi's network encoders did not send `firewall_zone_id`, and the controller replaces the whole network on update, so an update moved the network back to its default zone. The encoders now send it (fzymgc-house/go-unifi#2).
 
 - **`unifi_setting`: adding a section plans its computed attributes as known after apply.** Every Optional and Computed attribute inside a section used `UseStateForUnknown`, which copies the prior value even when the section is new and that value is null. A section added to the configuration therefore planned its unset attributes as null, and any value the controller set on the write failed the apply with an inconsistent result. The 87 attributes now use a plan modifier that keeps the prior value, null included, while the section existed in state, and leaves the value unknown when the section is new. An existing section still plans no known after apply for an attribute the controller keeps null. The 14 sections keep `UseStateForUnknown`, so a section the controller lacks still plans null.
 
