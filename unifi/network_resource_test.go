@@ -2129,10 +2129,9 @@ func minimalNetworkPlan(ctx context.Context, t *testing.T) (tfsdk.Plan, tfsdk.Co
 	return plan, config
 }
 
-// Test_networkResource_ModifyPlan_ipv6Aliases guards that ModifyPlan rejects
-// any non-null ipv6_aliases value (known, unknown, or empty list) with a clear
-// error instead of letting Create/Update silently drop it and produce a
-// confusing "provider produced inconsistent result after apply" failure (#413).
+// Test_networkResource_ModifyPlan_ipv6Aliases guards that ModifyPlan accepts
+// every ipv6_aliases value. go-unifi models the field, so the plan must not
+// reject it.
 func Test_networkResource_ModifyPlan_ipv6Aliases(t *testing.T) {
 	r := &networkResource{}
 	ctx := context.Background()
@@ -2148,22 +2147,22 @@ func Test_networkResource_ModifyPlan_ipv6Aliases(t *testing.T) {
 			wantError:   false,
 		},
 		{
-			name: "non-empty known list: error",
+			name: "non-empty known list: no error",
 			ipv6Aliases: types.ListValueMust(
 				types.StringType,
 				[]attr.Value{types.StringValue("2001:db8::1")},
 			),
-			wantError: true,
+			wantError: false,
 		},
 		{
-			name:        "unknown list: error",
+			name:        "unknown list: no error",
 			ipv6Aliases: types.ListUnknown(types.StringType),
-			wantError:   true,
+			wantError:   false,
 		},
 		{
-			name:        "empty known list: error",
+			name:        "empty known list: no error",
 			ipv6Aliases: types.ListValueMust(types.StringType, []attr.Value{}),
-			wantError:   true,
+			wantError:   false,
 		},
 	}
 
@@ -2839,4 +2838,82 @@ func Test_networkResource_networkToModel_importsVLANOnlySettingsFromController(t
 			)
 		}
 	})
+}
+
+// ipv6_aliases carries extra IPv6 addresses, such as a ULA gateway beside a delegated prefix,
+// from the configuration to the controller and back.
+func Test_networkResource_ipv6Aliases(t *testing.T) {
+	ctx := context.Background()
+	r := &networkResource{}
+
+	model := &networkResourceModel{
+		Name:                        types.StringValue("test-net"),
+		Enabled:                     types.BoolValue(true),
+		Subnet:                      cidrtypes.NewIPv4PrefixValue("10.0.0.0/24"),
+		AutoScale:                   types.BoolValue(false),
+		NetworkIsolation:            types.BoolValue(false),
+		SettingPreference:           types.StringNull(),
+		InternetAccess:              types.BoolValue(false),
+		MulticastDNS:                types.BoolValue(false),
+		GatewayType:                 types.StringNull(),
+		IPv6InterfaceType:           types.StringValue("pd"),
+		IPv6ClientAddressAssignment: types.StringNull(),
+		IPv6StaticSubnet:            types.StringNull(),
+		IPv6RA:                      types.BoolValue(true),
+		IPv6RAPriority:              types.StringNull(),
+		IPv6RAPreferredLifetime:     timetypes.NewGoDurationNull(),
+		IPv6RAValidLifetime:         timetypes.NewGoDurationNull(),
+		IPv6PDInterface:             types.StringValue("wan"),
+		IPv6PDPrefixID:              types.StringNull(),
+		IPv6PDStart:                 types.StringNull(),
+		IPv6PDStop:                  types.StringNull(),
+		IPv6PDAutoPrefixidEnabled:   types.BoolValue(true),
+		LteLan:                      types.BoolValue(false),
+		ThirdPartyGateway:           types.BoolValue(false),
+		IgmpSnooping:                types.BoolValue(false),
+		Vlan:                        types.Int64Null(),
+		NatOutboundIPAddresses:      types.ListNull(types.ObjectType{AttrTypes: natOutboundIPAddresses()}),
+		IPAliases:                   types.ListNull(types.StringType),
+		IPv6Aliases:                 types.ListValueMust(types.StringType, []attr.Value{types.StringValue("fd00:601::1/64")}),
+		DhcpServer:                  types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
+		DhcpRelay:                   types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
+		DhcpV6Server:                types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
+		DhcpGuarding:                types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
+	}
+	network, diags := r.modelToNetwork(ctx, model)
+	if diags.HasError() {
+		t.Fatalf("modelToNetwork() diagnostics: %v", diags)
+	}
+	if len(network.IPV6Aliases) != 1 || network.IPV6Aliases[0] != "fd00:601::1/64" {
+		t.Errorf("modelToNetwork() IPV6Aliases = %v, want [fd00:601::1/64]", network.IPV6Aliases)
+	}
+
+	previous := &networkResourceModel{
+		DhcpServer:             types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
+		DhcpRelay:              types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
+		DhcpV6Server:           types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
+		DhcpGuarding:           types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
+		NatOutboundIPAddresses: types.ListNull(types.ObjectType{AttrTypes: natOutboundIPAddresses()}),
+		IPAliases:              types.ListNull(types.StringType),
+		IPv6Aliases:            types.ListValueMust(types.StringType, []attr.Value{}),
+	}
+	read := &networkResourceModel{}
+	stored := &unifi.Network{ID: "net-1", Name: strPtr("test-net"), Purpose: unifi.PurposeCorporate, Enabled: true, IPV6Aliases: []string{"fd00:601::1/64"}}
+	if d := r.networkToModel(ctx, stored, read, "default", previous); d.HasError() {
+		t.Fatalf("networkToModel() diagnostics: %v", d)
+	}
+	var got []string
+	read.IPv6Aliases.ElementsAs(ctx, &got, false)
+	if len(got) != 1 || got[0] != "fd00:601::1/64" {
+		t.Errorf("networkToModel() IPv6Aliases = %v, want [fd00:601::1/64]", got)
+	}
+
+	empty := &networkResourceModel{}
+	bare := &unifi.Network{ID: "net-1", Name: strPtr("test-net"), Purpose: unifi.PurposeCorporate, Enabled: true}
+	if d := r.networkToModel(ctx, bare, empty, "default", previous); d.HasError() {
+		t.Fatalf("networkToModel() diagnostics: %v", d)
+	}
+	if empty.IPv6Aliases.IsNull() || len(empty.IPv6Aliases.Elements()) != 0 {
+		t.Errorf("networkToModel() with a managed empty list = %v, want a known empty list", empty.IPv6Aliases)
+	}
 }

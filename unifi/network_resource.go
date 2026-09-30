@@ -561,9 +561,10 @@ func (r *networkResource) Schema(
 				ElementType: types.StringType,
 			},
 			"ipv6_aliases": schema.ListAttribute{
-				MarkdownDescription: "List of IPv6 aliases for the network. Not currently supported: " +
-					"the underlying UniFi API client has no field for this value, so a " +
-					"non-empty list is rejected at plan time (#413).",
+				MarkdownDescription: "List of additional IPv6 addresses on the network, in CIDR notation " +
+					"(e.g. `fd00:601::1/64`). The gateway holds each one on the network beside the " +
+					"prefix from `ipv6_interface_type`, such as a ULA gateway address beside a " +
+					"delegated prefix.",
 				Optional:    true,
 				ElementType: types.StringType,
 			},
@@ -926,9 +927,8 @@ func (r *networkResource) Configure(
 	r.client = client
 }
 
-// ModifyPlan rejects a configured ipv6_aliases (#413, unsupported by the
-// underlying client) and forces setting_preference to "manual" when DHCP
-// relay or DHCP guarding is enabled.
+// ModifyPlan forces setting_preference to "manual" when DHCP relay or DHCP
+// guarding is enabled.
 //
 // With setting_preference "auto" the controller auto-manages the network:
 // it re-enables its built-in DHCP server, which silently turns dhcp_relay
@@ -980,35 +980,10 @@ func (r *networkResource) ModifyPlan(
 		}
 	}
 
-	// ipv6_aliases: go-unifi's Network struct has no field for this yet, so a
-	// configured value can never reach the controller. Fail fast at plan time
-	// with a clear message instead of Create/Update silently dropping it and
-	// producing a confusing "provider produced inconsistent result after
-	// apply" error (#413).
-	// Read from the plan (not config) so that unknown values derived from
-	// data sources are caught here too.
-	var ipv6Aliases types.List
-	resp.Diagnostics.Append(
-		req.Plan.GetAttribute(ctx, path.Root("ipv6_aliases"), &ipv6Aliases)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if !ipv6Aliases.IsNull() {
-		resp.Diagnostics.AddError(
-			"ipv6_aliases is not yet supported",
-			"The underlying UniFi API client (go-unifi) does not currently expose "+
-				"a field for ipv6_aliases, so the provider cannot send this value to "+
-				"the controller even though the controller accepts and returns it. "+
-				"Remove ipv6_aliases from this configuration until upstream client "+
-				"support lands (see issue #413).",
-		)
-		return
-	}
-
 	// ip_address_pool inside nat_outbound_ip_addresses: the field is not yet
 	// wired to the API request side (modelToNetwork ignores it) and Read always
 	// writes null, which causes the same inconsistent-result-after-apply failure
-	// as ipv6_aliases. Reject any non-null value at plan time.
+	// as an unmapped field would. Reject any non-null value at plan time.
 	var natList types.List
 	resp.Diagnostics.Append(
 		req.Plan.GetAttribute(ctx, path.Root("nat_outbound_ip_addresses"), &natList)...)
@@ -1704,9 +1679,15 @@ func (r *networkResource) modelToNetwork(
 		}
 	}
 
-	// ipv6_aliases: go-unifi's Network struct has no field to send this to the
-	// API (#413), so there is nothing to map here. ModifyPlan rejects a
-	// non-empty configured value before modelToNetwork ever runs.
+	// Handle IPv6 aliases
+	if !model.IPv6Aliases.IsNull() && !model.IPv6Aliases.IsUnknown() {
+		var ipv6Aliases []string
+		d := model.IPv6Aliases.ElementsAs(ctx, &ipv6Aliases, false)
+		diags.Append(d...)
+		if !diags.HasError() {
+			network.IPV6Aliases = ipv6Aliases
+		}
+	}
 
 	// A DHCP server and DHCP relay cannot coexist on a network: with relay on,
 	// emitting DHCPDEnabled=true (as the default branch below would) makes the
@@ -2316,11 +2297,18 @@ func (r *networkResource) networkToModel(
 		model.IPAliases = types.ListNull(types.StringType)
 	}
 
-	// ipv6_aliases: go-unifi's Network struct has no field to carry this value
-	// yet, even though the controller accepts and returns it (#413). ModifyPlan
-	// rejects a non-empty configured value before Create/Update run, so this
-	// only ever needs to represent the "unset" case.
-	model.IPv6Aliases = types.ListNull(types.StringType)
+	if len(network.IPV6Aliases) > 0 {
+		ipv6AliasesList, d := types.ListValueFrom(ctx, types.StringType, network.IPV6Aliases)
+		diags.Append(d...)
+		model.IPv6Aliases = ipv6AliasesList
+	} else if previousModel != nil && !previousModel.IPv6Aliases.IsNull() &&
+		!previousModel.IPv6Aliases.IsUnknown() {
+		// Managed but the API returned nothing: keep a known empty list, as for
+		// ip_aliases, so a configured `ipv6_aliases = []` applies cleanly.
+		model.IPv6Aliases = types.ListValueMust(types.StringType, []attr.Value{})
+	} else {
+		model.IPv6Aliases = types.ListNull(types.StringType)
+	}
 
 	// Only populate dhcp_server if:
 	// 1. It was configured in the previous state (not null), OR
