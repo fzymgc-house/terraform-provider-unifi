@@ -407,10 +407,12 @@ func (r *wlanFrameworkResource) Schema(
 						ElementType:         types.StringType,
 					},
 					"policy": schema.StringAttribute{
-						MarkdownDescription: "MAC address filter policy (only valid if `enabled` is `true`).",
-						Optional:            true,
-						Computed:            true,
-						Default:             stringdefault.StaticString("deny"),
+						MarkdownDescription: "MAC address filter policy (only valid if `enabled` is `true`). " +
+							"Unset, the controller keeps its own value. A default here would plan " +
+							"a change on every WLAN the UI created, because the framework applies " +
+							"a nested default even when `mac_filter` is absent from the config.",
+						Optional: true,
+						Computed: true,
 						Validators: []validator.String{
 							stringvalidator.OneOf("allow", "deny"),
 						},
@@ -613,10 +615,11 @@ func (r *wlanFrameworkResource) Schema(
 				},
 			},
 			"group_rekey": schema.Int64Attribute{
+				// No default: a WLAN the UI created can hold null here, and a default would plan
+				// a write on import. Unset, the controller keeps its own value.
 				MarkdownDescription: "Group rekey interval in seconds (0 to disable).",
 				Optional:            true,
 				Computed:            true,
-				Default:             int64default.StaticInt64(3600),
 			},
 			"iapp_enabled": schema.BoolAttribute{
 				MarkdownDescription: "Enable Inter-Access Point Protocol (802.11f) for faster roaming. Computed from the controller when not set.",
@@ -1621,7 +1624,11 @@ func (r *wlanFrameworkResource) planOntoWLAN(
 	wlan.MinrateNaEnabled = plan.MinimumDataRate5GKbps.ValueInt64() > 0
 	wlan.MinrateNaDataRateKbps = plan.MinimumDataRate5GKbps.ValueInt64Pointer()
 
-	wlan.GroupRekey = plan.GroupRekey.ValueInt64Pointer()
+	// An unknown Int64 converts to a pointer to zero, which would turn group rekey off. Send the
+	// interval only when the plan holds one; otherwise the live value, or nothing on create, stays.
+	if !plan.GroupRekey.IsNull() && !plan.GroupRekey.IsUnknown() {
+		wlan.GroupRekey = plan.GroupRekey.ValueInt64Pointer()
+	}
 	wlan.DTIMMode = plan.DTIMMode.ValueString()
 	wlan.WPAEnc = plan.WPAEnc.ValueString()
 	wlan.WPAMode = plan.WPAMode.ValueString()

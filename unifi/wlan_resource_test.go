@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	fwlist "github.com/hashicorp/terraform-plugin-framework/list"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/ubiquiti-community/go-unifi/unifi"
@@ -1465,5 +1466,70 @@ func Test_wlanFrameworkResource_passphraseWOVersion(t *testing.T) {
 	r.applyPlanToState(ctx, &plan, &state)
 	if !state.PassphraseWOVersion.IsNull() {
 		t.Errorf("PassphraseWOVersion = %v, want null once the config drops it", state.PassphraseWOVersion)
+	}
+}
+
+// A WLAN the controller UI created can hold null in group_rekey and "allow" in
+// mac_filter.policy. A schema default on either attribute makes the framework plan a value
+// that differs from the prior state whenever the config leaves it out, so an imported WLAN
+// never reaches a plan with nothing to change, and a nested default fires even when the
+// whole mac_filter object is absent. Both attributes stay computed without a default, and
+// an unknown group_rekey is not sent, because an unknown Int64 converts to a pointer to zero.
+func Test_wlanFrameworkResource_importDefaults(t *testing.T) {
+	ctx := context.Background()
+	r := &wlanFrameworkResource{}
+
+	resp := &fwresource.SchemaResponse{}
+	r.Schema(ctx, fwresource.SchemaRequest{}, resp)
+
+	groupRekey, ok := resp.Schema.Attributes["group_rekey"].(schema.Int64Attribute)
+	if !ok {
+		t.Fatal("group_rekey is not an Int64Attribute")
+	}
+	if groupRekey.Default != nil || !groupRekey.IsComputed() {
+		t.Errorf("group_rekey must be computed with no default: %+v", groupRekey)
+	}
+
+	macFilter, ok := resp.Schema.Attributes["mac_filter"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatal("mac_filter is not a SingleNestedAttribute")
+	}
+	policy, ok := macFilter.Attributes["policy"].(schema.StringAttribute)
+	if !ok {
+		t.Fatal("mac_filter.policy is not a StringAttribute")
+	}
+	if policy.Default != nil || !policy.IsComputed() {
+		t.Errorf("mac_filter.policy must be computed with no default: %+v", policy)
+	}
+
+	rekey := int64(600)
+	live := &unifi.WLAN{GroupRekey: &rekey}
+	plan := wlanFrameworkResourceModel{
+		Name:       types.StringValue("w"),
+		Security:   types.StringValue("wpapsk"),
+		GroupRekey: types.Int64Unknown(),
+		MacFilter: types.ObjectNull(map[string]attr.Type{
+			"enabled": types.BoolType,
+			"list":    types.SetType{ElemType: types.StringType},
+			"policy":  types.StringType,
+		}),
+		PrivatePresharedKeys: types.ListNull(
+			types.ObjectType{AttrTypes: wlanPrivatePresharedKeyModel{}.AttributeTypes()},
+		),
+		ApGroupIDs:          types.SetNull(types.StringType),
+		WLANBands:           types.SetNull(types.StringType),
+		Schedule:            types.ListNull(types.ObjectType{}),
+		BroadcastFilterList: types.SetNull(types.StringType),
+	}
+	got, diags := r.planOntoWLAN(ctx, plan, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoWLAN() diagnostics: %v", diags)
+	}
+	if got.GroupRekey == nil || *got.GroupRekey != 600 {
+		t.Errorf("GroupRekey = %v, want the live 600 kept for an unknown plan", got.GroupRekey)
+	}
+	fresh, _ := r.planOntoWLAN(ctx, plan, nil)
+	if fresh.GroupRekey != nil {
+		t.Errorf("GroupRekey = %v, want nil on create for an unknown plan", *fresh.GroupRekey)
 	}
 }

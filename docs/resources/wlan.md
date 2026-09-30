@@ -137,7 +137,7 @@ Optional:
 
 - `enabled` (Boolean) Indicates whether or not the MAC filter is turned on for the network.
 - `list` (Set of String) List of MAC addresses to filter (only valid if `enabled` is `true`).
-- `policy` (String) MAC address filter policy (only valid if `enabled` is `true`).
+- `policy` (String) MAC address filter policy (only valid if `enabled` is `true`). Unset, the controller keeps its own value. A default here would plan a change on every WLAN the UI created, because the framework applies a nested default even when `mac_filter` is absent from the config.
 
 
 <a id="nestedatt--private_preshared_keys"></a>
