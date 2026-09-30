@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features
 
+- **`unifi_wlan`: `passphrase_wo_version`.** Terraform never compares a write-only value, so a rotated `passphrase_wo` reached the controller only when something else changed. Change the version number with the passphrase, and the next apply sends it. The number is a marker: it has no controller side and is never sensitive.
+
 - **`unifi_network`: `ipv6_aliases` is supported.** It holds extra IPv6 addresses on a network, in CIDR notation, such as a ULA gateway address beside a delegated prefix. Earlier releases rejected a non-empty list at plan time, because go-unifi had no field for it. Requires go-unifi with `Network.IPV6Aliases` (fzymgc-house/go-unifi#2).
 
 - **`unifi_setting`: new `global_switch` section.** The site-wide switch settings: `dhcp_snoop` (the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on), `dot1x_portctrl_enabled`, `dot1x_fallback_networkconf_id`, `radiusprofile_id`, `flowctrl_enabled`, `jumboframe_enabled`, `stp_version`, `auto_stp_edge_detection_enabled`, `link_debounce`, `poe_staging_delay_msec` and `switch_exclusions`. The controller replaces the whole section on write, so the provider reads it first and writes every unset field back as it was. Requires go-unifi with the three `GlobalSwitch` fields Network 10.6 stores that the generated struct lacked (fzymgc-house/go-unifi#1).
@@ -25,6 +27,8 @@ All notable changes to this project will be documented in this file.
 - **`unifi_device`: the `port_override` block is deprecated in favour of `unifi_device_ports`.** The block manages only the ports it declares, so it cannot make an import converge, because blocks cannot be Computed. Its update path also marshals go-unifi's typed overrides, which drops the keys listed above from every port. The block keeps working. Do not use it and `unifi_device_ports` on the same device.
 
 ### 🐛 Bug Fixes
+
+- **`unifi_wlan`: an update keeps every field the resource does not declare.** The controller replaces the whole WLAN on update, and the update sent a WLAN built from Terraform state alone, so the SAE parameters, the mDNS proxy mode, the minimum-rate advertising lists and every other undeclared field went out as zero or not at all. The update now reads the live WLAN first and lays the plan over it, as `unifi_setting` does. A null `passphrase` (the write-only workflow, or an imported WLAN) keeps the key the controller holds. Modelling the ten keys that Network 10.6 stores and go-unifi lacked is fzymgc-house/go-unifi#3.
 
 - **`unifi_network`: an update keeps the network's firewall zone.** go-unifi's network encoders did not send `firewall_zone_id`, and the controller replaces the whole network on update, so an update moved the network back to its default zone. The encoders now send it (fzymgc-house/go-unifi#2).
 

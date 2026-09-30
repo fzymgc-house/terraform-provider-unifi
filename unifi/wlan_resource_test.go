@@ -1359,3 +1359,111 @@ resource "unifi_wlan" "test_bs" {
 }
 `, userGroupID, mode)
 }
+
+// The controller replaces the whole WLAN on update. planOntoWLAN lays the plan over the WLAN as
+// the controller holds it, so a field the resource never sets keeps its live value, a list the
+// plan declares replaces the live list, and a null passphrase keeps the live key.
+func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
+	ctx := context.Background()
+	r := &wlanFrameworkResource{}
+
+	saeSync := int64(5)
+	live := &unifi.WLAN{
+		ID:                        "6abc",
+		Name:                      "old",
+		Passphrase:                "live-secret",
+		SaeGroups:                 []int64{19, 20},
+		SaeSync:                   &saeSync,
+		MdnsProxyMode:             "off",
+		SettingPreference:         "manual",
+		ApGroupIDs:                []string{"group-live"},
+		BroadcastFilterList:       []string{"aa:bb:cc:dd:ee:ff"},
+		RADIUSMACaclFormat:        "none",
+		MinrateNgAdvertisingRates: true,
+	}
+
+	plan := wlanFrameworkResourceModel{
+		ID:       types.StringValue("6abc"),
+		Name:     types.StringValue("new"),
+		Security: types.StringValue("wpapsk"),
+		MacFilter: types.ObjectNull(map[string]attr.Type{
+			"enabled": types.BoolType,
+			"list":    types.SetType{ElemType: types.StringType},
+			"policy":  types.StringType,
+		}),
+		PrivatePresharedKeys: types.ListNull(
+			types.ObjectType{AttrTypes: wlanPrivatePresharedKeyModel{}.AttributeTypes()},
+		),
+		ApGroupIDs:          types.SetValueMust(types.StringType, []attr.Value{types.StringValue("group-plan")}),
+		WLANBands:           types.SetNull(types.StringType),
+		Schedule:            types.ListNull(types.ObjectType{}),
+		BroadcastFilterList: types.SetNull(types.StringType),
+	}
+
+	got, diags := r.planOntoWLAN(ctx, plan, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoWLAN() diagnostics: %v", diags)
+	}
+	if got.Name != "new" {
+		t.Errorf("Name = %q, want the planned name", got.Name)
+	}
+	if got.Passphrase != "live-secret" {
+		t.Errorf("Passphrase = %q, want the live key kept for a null plan", got.Passphrase)
+	}
+	if len(got.SaeGroups) != 2 || got.SaeSync == nil || *got.SaeSync != 5 {
+		t.Errorf("SaeGroups = %v, SaeSync = %v, want the live SAE parameters", got.SaeGroups, got.SaeSync)
+	}
+	if got.MdnsProxyMode != "off" || got.SettingPreference != "manual" || got.RADIUSMACaclFormat != "none" || !got.MinrateNgAdvertisingRates {
+		t.Errorf("an undeclared field lost its live value: %+v", got)
+	}
+	if len(got.ApGroupIDs) != 1 || got.ApGroupIDs[0] != "group-plan" {
+		t.Errorf("ApGroupIDs = %v, want the planned list to replace the live one", got.ApGroupIDs)
+	}
+	if len(got.BroadcastFilterList) != 1 {
+		t.Errorf("BroadcastFilterList = %v, want the live list kept for a null plan", got.BroadcastFilterList)
+	}
+	if live.Name != "old" || len(live.ApGroupIDs) != 1 || live.ApGroupIDs[0] != "group-live" {
+		t.Errorf("planOntoWLAN changed its base: %+v", live)
+	}
+
+	fresh, diags := r.planOntoWLAN(ctx, plan, nil)
+	if diags.HasError() {
+		t.Fatalf("planOntoWLAN(nil) diagnostics: %v", diags)
+	}
+	if fresh.Passphrase != "" || fresh.SaeGroups != nil {
+		t.Errorf("a create must start from an empty WLAN: %+v", fresh)
+	}
+}
+
+// passphrase_wo_version is the only thing that makes a rotated write-only passphrase reach
+// the controller: Terraform never diffs a write-only value, so the operator changes the
+// version and the resulting update sends passphrase_wo again. The number is a marker with no
+// controller side, so it must be a plain optional attribute that follows the plan exactly,
+// including back to null.
+func Test_wlanFrameworkResource_passphraseWOVersion(t *testing.T) {
+	ctx := context.Background()
+	r := &wlanFrameworkResource{}
+
+	resp := &fwresource.SchemaResponse{}
+	r.Schema(ctx, fwresource.SchemaRequest{}, resp)
+	attr, ok := resp.Schema.Attributes["passphrase_wo_version"]
+	if !ok {
+		t.Fatal("Schema missing attribute passphrase_wo_version")
+	}
+	if !attr.IsOptional() || attr.IsComputed() || attr.IsSensitive() || attr.IsRequired() {
+		t.Errorf("passphrase_wo_version must be optional only: %+v", attr)
+	}
+
+	state := wlanFrameworkResourceModel{PassphraseWOVersion: types.Int64Null()}
+	plan := wlanFrameworkResourceModel{PassphraseWOVersion: types.Int64Value(2)}
+	r.applyPlanToState(ctx, &plan, &state)
+	if state.PassphraseWOVersion.ValueInt64() != 2 {
+		t.Errorf("PassphraseWOVersion = %v, want 2 from the plan", state.PassphraseWOVersion)
+	}
+
+	plan.PassphraseWOVersion = types.Int64Null()
+	r.applyPlanToState(ctx, &plan, &state)
+	if !state.PassphraseWOVersion.IsNull() {
+		t.Errorf("PassphraseWOVersion = %v, want null once the config drops it", state.PassphraseWOVersion)
+	}
+}
