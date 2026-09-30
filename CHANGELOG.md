@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
 
 ### 🐛 Bug Fixes
 
+- **`unifi_wlan`: a WLAN the UI created imports with nothing to change.** `mac_filter.policy` had the default `deny`, and the framework applies a nested default even when `mac_filter` is absent from the config, so every WLAN that holds `allow` planned an update on every run, visible only as `bandsteering_mode = (known after apply)`. `group_rekey` had the default `3600`, so a WLAN that holds null planned a write on import. Both attributes are now computed without a default: unset, the controller keeps its own value. An unknown `group_rekey` is no longer sent, because an unknown number converted to zero and would have turned group rekey off.
+
 - **`unifi_wlan`: an update keeps every field the resource does not declare.** The controller replaces the whole WLAN on update, and the update sent a WLAN built from Terraform state alone, so the SAE parameters, the mDNS proxy mode, the minimum-rate advertising lists and every other undeclared field went out as zero or not at all. The update now reads the live WLAN first and lays the plan over it, as `unifi_setting` does. A null `passphrase` (the write-only workflow, or an imported WLAN) keeps the key the controller holds. Modelling the ten keys that Network 10.6 stores and go-unifi lacked is fzymgc-house/go-unifi#3.
 
 - **`unifi_network`: an update keeps the network's firewall zone.** go-unifi's network encoders did not send `firewall_zone_id`, and the controller replaces the whole network on update, so an update moved the network back to its default zone. The encoders now send it (fzymgc-house/go-unifi#2).
