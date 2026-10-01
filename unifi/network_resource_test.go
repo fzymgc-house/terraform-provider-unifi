@@ -905,6 +905,7 @@ func Test_dhcpV6ServerModel_AttributeTypes(t *testing.T) {
 			m:    dhcpV6ServerModel{},
 			want: map[string]attr.Type{
 				"enabled":     types.BoolType,
+				"allow_slaac": types.BoolType,
 				"dns_auto":    types.BoolType,
 				"dns_servers": types.ListType{ElemType: types.StringType},
 				"lease":       types.Int64Type,
@@ -2872,13 +2873,18 @@ func Test_networkResource_ipv6Aliases(t *testing.T) {
 		ThirdPartyGateway:           types.BoolValue(false),
 		IgmpSnooping:                types.BoolValue(false),
 		Vlan:                        types.Int64Null(),
-		NatOutboundIPAddresses:      types.ListNull(types.ObjectType{AttrTypes: natOutboundIPAddresses()}),
-		IPAliases:                   types.ListNull(types.StringType),
-		IPv6Aliases:                 types.ListValueMust(types.StringType, []attr.Value{types.StringValue("fd00:601::1/64")}),
-		DhcpServer:                  types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
-		DhcpRelay:                   types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
-		DhcpV6Server:                types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
-		DhcpGuarding:                types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
+		NatOutboundIPAddresses: types.ListNull(
+			types.ObjectType{AttrTypes: natOutboundIPAddresses()},
+		),
+		IPAliases: types.ListNull(types.StringType),
+		IPv6Aliases: types.ListValueMust(
+			types.StringType,
+			[]attr.Value{types.StringValue("fd00:601::1/64")},
+		),
+		DhcpServer:   types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
+		DhcpRelay:    types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
+		DhcpV6Server: types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
+		DhcpGuarding: types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
 	}
 	network, diags := r.modelToNetwork(ctx, model)
 	if diags.HasError() {
@@ -2889,16 +2895,24 @@ func Test_networkResource_ipv6Aliases(t *testing.T) {
 	}
 
 	previous := &networkResourceModel{
-		DhcpServer:             types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
-		DhcpRelay:              types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
-		DhcpV6Server:           types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
-		DhcpGuarding:           types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
-		NatOutboundIPAddresses: types.ListNull(types.ObjectType{AttrTypes: natOutboundIPAddresses()}),
-		IPAliases:              types.ListNull(types.StringType),
-		IPv6Aliases:            types.ListValueMust(types.StringType, []attr.Value{}),
+		DhcpServer:   types.ObjectNull(dhcpServerModel{}.AttributeTypes()),
+		DhcpRelay:    types.ObjectNull(dhcpRelayModel{}.AttributeTypes()),
+		DhcpV6Server: types.ObjectNull(dhcpV6ServerModel{}.AttributeTypes()),
+		DhcpGuarding: types.ObjectNull(dhcpGuardingModel{}.AttributeTypes()),
+		NatOutboundIPAddresses: types.ListNull(
+			types.ObjectType{AttrTypes: natOutboundIPAddresses()},
+		),
+		IPAliases:   types.ListNull(types.StringType),
+		IPv6Aliases: types.ListValueMust(types.StringType, []attr.Value{}),
 	}
 	read := &networkResourceModel{}
-	stored := &unifi.Network{ID: "net-1", Name: strPtr("test-net"), Purpose: unifi.PurposeCorporate, Enabled: true, IPV6Aliases: []string{"fd00:601::1/64"}}
+	stored := &unifi.Network{
+		ID:          "net-1",
+		Name:        strPtr("test-net"),
+		Purpose:     unifi.PurposeCorporate,
+		Enabled:     true,
+		IPV6Aliases: []string{"fd00:601::1/64"},
+	}
 	if d := r.networkToModel(ctx, stored, read, "default", previous); d.HasError() {
 		t.Fatalf("networkToModel() diagnostics: %v", d)
 	}
@@ -2909,11 +2923,163 @@ func Test_networkResource_ipv6Aliases(t *testing.T) {
 	}
 
 	empty := &networkResourceModel{}
-	bare := &unifi.Network{ID: "net-1", Name: strPtr("test-net"), Purpose: unifi.PurposeCorporate, Enabled: true}
+	bare := &unifi.Network{
+		ID:      "net-1",
+		Name:    strPtr("test-net"),
+		Purpose: unifi.PurposeCorporate,
+		Enabled: true,
+	}
 	if d := r.networkToModel(ctx, bare, empty, "default", previous); d.HasError() {
 		t.Fatalf("networkToModel() diagnostics: %v", d)
 	}
 	if empty.IPv6Aliases.IsNull() || len(empty.IPv6Aliases.Elements()) != 0 {
-		t.Errorf("networkToModel() with a managed empty list = %v, want a known empty list", empty.IPv6Aliases)
+		t.Errorf(
+			"networkToModel() with a managed empty list = %v, want a known empty list",
+			empty.IPv6Aliases,
+		)
 	}
+}
+
+// The UI of a UniFi gateway writes ipv6_setting_preference and
+// dhcpdv6_allow_slaac on a network with prefix delegation. Both attributes are
+// managed only when configured: unset, they stay off the wire and null in state.
+func Test_networkResource_ipv6SLAACFields(t *testing.T) {
+	ctx := context.Background()
+	r := &networkResource{}
+
+	dhcpV6 := func(allowSlaac types.Bool) types.Object {
+		obj, d := types.ObjectValueFrom(
+			ctx,
+			dhcpV6ServerModel{}.AttributeTypes(),
+			dhcpV6ServerModel{
+				Enabled:    types.BoolValue(false),
+				AllowSlaac: allowSlaac,
+				DNSAuto:    types.BoolValue(false),
+				DNSServers: types.ListNull(types.StringType),
+				Lease:      types.Int64Null(),
+				Start:      types.StringNull(),
+				Stop:       types.StringNull(),
+			},
+		)
+		if d.HasError() {
+			t.Fatalf("ObjectValueFrom: %v", d)
+		}
+		return obj
+	}
+	allowSlaacOf := func(t *testing.T, model networkResourceModel) types.Bool {
+		t.Helper()
+		var got dhcpV6ServerModel
+		if d := model.DhcpV6Server.As(ctx, &got, basetypes.ObjectAsOptions{}); d.HasError() {
+			t.Fatalf("As: %v", d)
+		}
+		return got.AllowSlaac
+	}
+	stored := &unifi.Network{
+		ID:                    "net-1",
+		Name:                  strPtr("leg"),
+		Purpose:               unifi.PurposeCorporate,
+		IPV6SettingPreference: strPtr("manual"),
+		DHCPDV6AllowSlaac:     boolPtr(true),
+	}
+
+	t.Run("configured values reach the API struct", func(t *testing.T) {
+		for _, allow := range []bool{true, false} {
+			network, d := r.modelToNetwork(ctx, &networkResourceModel{
+				Name:                  types.StringValue("leg"),
+				IPv6SettingPreference: types.StringValue("manual"),
+				DhcpV6Server:          dhcpV6(types.BoolValue(allow)),
+			})
+			if d.HasError() {
+				t.Fatalf("modelToNetwork: %v", d)
+			}
+			if network.IPV6SettingPreference == nil || *network.IPV6SettingPreference != "manual" {
+				t.Errorf("IPV6SettingPreference = %v, want manual", network.IPV6SettingPreference)
+			}
+			if network.DHCPDV6AllowSlaac == nil || *network.DHCPDV6AllowSlaac != allow {
+				t.Errorf("DHCPDV6AllowSlaac = %v, want %t", network.DHCPDV6AllowSlaac, allow)
+			}
+		}
+	})
+
+	t.Run("unset values stay off the wire", func(t *testing.T) {
+		for name, model := range map[string]*networkResourceModel{
+			"no dhcp_v6_server":   {Name: types.StringValue("leg")},
+			"null allow_slaac":    {Name: types.StringValue("leg"), DhcpV6Server: dhcpV6(types.BoolNull())},
+			"null preference set": {Name: types.StringValue("leg"), IPv6SettingPreference: types.StringNull()},
+		} {
+			network, d := r.modelToNetwork(ctx, model)
+			if d.HasError() {
+				t.Fatalf("%s: modelToNetwork: %v", name, d)
+			}
+			if network.IPV6SettingPreference != nil {
+				t.Errorf(
+					"%s: IPV6SettingPreference = %q, want nil",
+					name,
+					*network.IPV6SettingPreference,
+				)
+			}
+			if network.DHCPDV6AllowSlaac != nil {
+				t.Errorf("%s: DHCPDV6AllowSlaac = %t, want nil", name, *network.DHCPDV6AllowSlaac)
+			}
+		}
+	})
+
+	t.Run("configured values are read from the controller", func(t *testing.T) {
+		previous := &networkResourceModel{
+			NetworkIsolation:      types.BoolValue(false),
+			IPv6SettingPreference: types.StringValue("auto"),
+			DhcpV6Server:          dhcpV6(types.BoolValue(false)),
+		}
+		var model networkResourceModel
+		if d := r.networkToModel(ctx, stored, &model, "default", previous); d.HasError() {
+			t.Fatalf("networkToModel: %v", d)
+		}
+		if got := model.IPv6SettingPreference.ValueString(); got != "manual" {
+			t.Errorf("IPv6SettingPreference = %q, want manual", got)
+		}
+		if got := allowSlaacOf(t, model); got.IsNull() || !got.ValueBool() {
+			t.Errorf("allow_slaac = %v, want true", got)
+		}
+	})
+
+	t.Run("unset values stay null in state", func(t *testing.T) {
+		previous := &networkResourceModel{
+			NetworkIsolation: types.BoolValue(false),
+			DhcpV6Server:     dhcpV6(types.BoolNull()),
+		}
+		var model networkResourceModel
+		if d := r.networkToModel(ctx, stored, &model, "default", previous); d.HasError() {
+			t.Fatalf("networkToModel: %v", d)
+		}
+		if !model.IPv6SettingPreference.IsNull() {
+			t.Errorf("IPv6SettingPreference = %v, want null", model.IPv6SettingPreference)
+		}
+		if got := allowSlaacOf(t, model); !got.IsNull() {
+			t.Errorf("allow_slaac = %v, want null", got)
+		}
+	})
+
+	t.Run("an import leaves both null", func(t *testing.T) {
+		imported := *stored
+		imported.DHCPDV6Enabled = true
+		var model networkResourceModel
+		if d := r.networkToModel(
+			ctx,
+			&imported,
+			&model,
+			"default",
+			&networkResourceModel{},
+		); d.HasError() {
+			t.Fatalf("networkToModel: %v", d)
+		}
+		if !model.IPv6SettingPreference.IsNull() {
+			t.Errorf("IPv6SettingPreference = %v, want null", model.IPv6SettingPreference)
+		}
+		if model.DhcpV6Server.IsNull() {
+			t.Fatal("dhcp_v6_server is null, want the imported block")
+		}
+		if got := allowSlaacOf(t, model); !got.IsNull() {
+			t.Errorf("allow_slaac = %v, want null", got)
+		}
+	})
 }

@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features
 
+- **`unifi_network`: `ipv6_setting_preference` and `dhcp_v6_server.allow_slaac`.** The UI of a UniFi gateway stores `ipv6_setting_preference = manual` and `dhcpdv6_allow_slaac = true` on a network with prefix delegation. The provider had no attribute for either key, so a network that Terraform moved to prefix delegation did not hold what the UI writes. Both attributes are optional and are managed only when configured: an unset attribute stays off the wire and null in state, on import too, so a network that does not declare it plans no change. The `unifi_network` data source reads `dhcp_v6_server.allow_slaac`. Requires go-unifi with `Network.DHCPDV6AllowSlaac` as a pointer (fzymgc-house/go-unifi#4).
+
 - **`unifi_wlan`: `passphrase_wo_version`.** Terraform never compares a write-only value, so a rotated `passphrase_wo` reached the controller only when something else changed. Change the version number with the passphrase, and the next apply sends it. The number is a marker: it has no controller side and is never sensitive.
 
 - **`unifi_network`: `ipv6_aliases` is supported.** It holds extra IPv6 addresses on a network, in CIDR notation, such as a ULA gateway address beside a delegated prefix. Earlier releases rejected a non-empty list at plan time, because go-unifi had no field for it. Requires go-unifi with `Network.IPV6Aliases` (fzymgc-house/go-unifi#2).

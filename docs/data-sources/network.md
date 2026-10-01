@@ -154,6 +154,7 @@ Read-Only:
 
 Read-Only:
 
+- `allow_slaac` (Boolean) Whether clients on the network may form an address by SLAAC. Null when the controller stores no value.
 - `dns_auto` (Boolean) When true, upstream DNS entries are propagated. When false, `dns_servers` are used.
 - `dns_servers` (List of String) IPv6 DNS server addresses for DHCPv6 clients.
 - `enabled` (Boolean) Specifies whether stateful DHCPv6 is enabled.

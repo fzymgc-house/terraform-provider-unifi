@@ -409,6 +409,10 @@ func (d *networkDataSource) Schema(
 						MarkdownDescription: "Specifies whether stateful DHCPv6 is enabled.",
 						Computed:            true,
 					},
+					"allow_slaac": schema.BoolAttribute{
+						MarkdownDescription: "Whether clients on the network may form an address by SLAAC. Null when the controller stores no value.",
+						Computed:            true,
+					},
 					"dns_auto": schema.BoolAttribute{
 						MarkdownDescription: "When true, upstream DNS entries are propagated. When false, `dns_servers` are used.",
 						Computed:            true,
@@ -799,6 +803,7 @@ func (d *networkDataSource) setDataSourceData(
 
 		dhcpV6ServerValue := dhcpV6ServerModel{
 			Enabled:    types.BoolValue(network.DHCPDV6Enabled),
+			AllowSlaac: types.BoolPointerValue(network.DHCPDV6AllowSlaac),
 			DNSAuto:    types.BoolValue(network.DHCPDV6DNSAuto),
 			DNSServers: dhcpv6DNSList,
 			Lease:      types.Int64PointerValue(network.DHCPDV6LeaseTime),

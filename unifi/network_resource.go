@@ -199,6 +199,7 @@ func (d dhcpRelayModel) AttributeTypes() map[string]attr.Type {
 // dhcpV6ServerModel describes the DHCPv6 server configuration.
 type dhcpV6ServerModel struct {
 	Enabled    types.Bool   `tfsdk:"enabled"`
+	AllowSlaac types.Bool   `tfsdk:"allow_slaac"`
 	DNSAuto    types.Bool   `tfsdk:"dns_auto"`
 	DNSServers types.List   `tfsdk:"dns_servers"`
 	Lease      types.Int64  `tfsdk:"lease"`
@@ -209,6 +210,7 @@ type dhcpV6ServerModel struct {
 func (m dhcpV6ServerModel) AttributeTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"enabled":     types.BoolType,
+		"allow_slaac": types.BoolType,
 		"dns_auto":    types.BoolType,
 		"dns_servers": types.ListType{ElemType: types.StringType},
 		"lease":       types.Int64Type,
@@ -236,6 +238,7 @@ type networkResourceModel struct {
 	GatewayType                 types.String         `tfsdk:"gateway_type"`
 	IPv6InterfaceType           types.String         `tfsdk:"ipv6_interface_type"`
 	IPv6ClientAddressAssignment types.String         `tfsdk:"ipv6_client_address_assignment"`
+	IPv6SettingPreference       types.String         `tfsdk:"ipv6_setting_preference"`
 	IPv6StaticSubnet            types.String         `tfsdk:"ipv6_static_subnet"`
 	IPv6RA                      types.Bool           `tfsdk:"ipv6_ra"`
 	IPv6RAPriority              types.String         `tfsdk:"ipv6_ra_priority"`
@@ -449,6 +452,17 @@ func (r *networkResource) Schema(
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"ipv6_setting_preference": schema.StringAttribute{
+				MarkdownDescription: "Whether the controller (`auto`) or this configuration " +
+					"(`manual`) decides the IPv6 settings of the network. The UI of a UniFi " +
+					"gateway stores `manual` on a network whose IPv6 settings were set by hand. " +
+					"Leave it unset to keep the value the controller holds: the provider then " +
+					"does not send the key and does not read it.",
+				Optional: true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("auto", "manual"),
 				},
 			},
 			"ipv6_static_subnet": schema.StringAttribute{
@@ -796,6 +810,14 @@ func (r *networkResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						Default:             booldefault.StaticBool(false),
+					},
+					"allow_slaac": schema.BoolAttribute{
+						MarkdownDescription: "Whether clients on the network may form an address by " +
+							"SLAAC (the controller's `dhcpdv6_allow_slaac`). The UI of a UniFi gateway " +
+							"stores `true` on a network with prefix delegation. Leave it unset to keep " +
+							"the value the controller holds: the provider then does not send the key " +
+							"and does not read it.",
+						Optional: true,
 					},
 					"dns_auto": schema.BoolAttribute{
 						MarkdownDescription: "Specifies whether DNS auto-discovery is enabled for DHCPv6.",
@@ -1587,6 +1609,7 @@ func (r *networkResource) modelToNetwork(
 		GatewayType:                 model.GatewayType.ValueStringPointer(),
 		IPV6InterfaceType:           model.IPv6InterfaceType.ValueStringPointer(),
 		IPV6ClientAddressAssignment: optStr(model.IPv6ClientAddressAssignment),
+		IPV6SettingPreference:       optStr(model.IPv6SettingPreference),
 		IPV6Subnet:                  model.IPv6StaticSubnet.ValueStringPointer(),
 		IPV6RaEnabled:               model.IPv6RA.ValueBool(),
 		IPV6RaPriority:              optStr(model.IPv6RAPriority),
@@ -1913,6 +1936,8 @@ func (r *networkResource) modelToNetwork(
 		diags.Append(d...)
 		if !diags.HasError() {
 			network.DHCPDV6Enabled = dhcpV6Server.Enabled.ValueBool()
+			// A null allow_slaac stays off the wire, so the controller keeps its value.
+			network.DHCPDV6AllowSlaac = dhcpV6Server.AllowSlaac.ValueBoolPointer()
 			network.DHCPDV6DNSAuto = dhcpV6Server.DNSAuto.ValueBool()
 			network.DHCPDV6Start = dhcpV6Server.Start.ValueStringPointer()
 			network.DHCPDV6Stop = dhcpV6Server.Stop.ValueStringPointer()
@@ -2205,6 +2230,15 @@ func (r *networkResource) networkToModel(
 		model.DomainName = types.StringPointerValue(network.DomainName)
 	}
 
+	// ipv6_setting_preference is managed only when it is configured. An unset
+	// attribute stays null, on import too, so a network that does not declare it
+	// plans no change and an update leaves the controller's value alone.
+	if previousModel != nil && !previousModel.IPv6SettingPreference.IsNull() {
+		model.IPv6SettingPreference = types.StringPointerValue(network.IPV6SettingPreference)
+	} else {
+		model.IPv6SettingPreference = types.StringNull()
+	}
+
 	// Build dhcp_guarding from API fields
 	shouldPopulateDhcpGuarding := false
 	if previousModel != nil {
@@ -2464,8 +2498,21 @@ func (r *networkResource) networkToModel(
 			dhcpv6DNSList = types.ListNull(types.StringType)
 		}
 
+		// allow_slaac is managed only when it is configured, as
+		// ipv6_setting_preference is: an unset value stays null.
+		allowSlaac := types.BoolNull()
+		if !previousModel.DhcpV6Server.IsNull() && !previousModel.DhcpV6Server.IsUnknown() {
+			var previous dhcpV6ServerModel
+			diags.Append(
+				previousModel.DhcpV6Server.As(ctx, &previous, basetypes.ObjectAsOptions{})...)
+			if !previous.AllowSlaac.IsNull() {
+				allowSlaac = types.BoolPointerValue(network.DHCPDV6AllowSlaac)
+			}
+		}
+
 		dhcpV6ServerValue := dhcpV6ServerModel{
 			Enabled:    types.BoolValue(network.DHCPDV6Enabled),
+			AllowSlaac: allowSlaac,
 			DNSAuto:    types.BoolValue(network.DHCPDV6DNSAuto),
 			DNSServers: dhcpv6DNSList,
 			Lease:      types.Int64PointerValue(network.DHCPDV6LeaseTime),
