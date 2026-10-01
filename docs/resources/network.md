@@ -116,6 +116,7 @@ resource "unifi_network" "third_party" {
 - `ipv6_ra_preferred_lifetime` (String) The IPv6 Router Advertisement preferred lifetime, as a Go duration string (e.g. `14400s`, `4h`). Must be a whole number of seconds between `0s` and `31536000s` (1 year).
 - `ipv6_ra_priority` (String) The IPv6 Router Advertisement priority. Must be one of `high`, `medium`, or `low`.
 - `ipv6_ra_valid_lifetime` (String) The IPv6 Router Advertisement valid lifetime, as a Go duration string (e.g. `86400s`, `24h`). Must be a whole number of seconds between `0s` and `31536000s` (1 year).
+- `ipv6_setting_preference` (String) Whether the controller (`auto`) or this configuration (`manual`) decides the IPv6 settings of the network. The UI of a UniFi gateway stores `manual` on a network whose IPv6 settings were set by hand. Leave it unset to keep the value the controller holds: the provider then does not send the key and does not read it.
 - `ipv6_static_subnet` (String) The IPv6 static subnet of the network. Only used when `ipv6_interface_type` is `static`.
 - `lte_lan` (Boolean) Whether this network/VLAN stays active when the gateway fails over to a UniFi LTE (cellular) backup WAN. Maps to the controller's `lte_lan_enabled` flag and only matters when a UniFi LTE failover device is in use; otherwise it is cosmetic. Defaults to `true` (network stays available during LTE failover); set to `false` to disable it while on the LTE backup link. The controller may set this automatically, which is why existing networks can show differing values.
 - `multicast_dns` (Boolean) Specifies whether mDNS is enabled. This is read back from the controller rather than defaulted: some controllers (notably UniFi OS gateways) ignore `mdns_enabled` at create/update time and always store `false`, so forcing a `true` default produced a "provider produced inconsistent result after apply" error.
@@ -198,6 +199,7 @@ Optional:
 
 Optional:
 
+- `allow_slaac` (Boolean) Whether clients on the network may form an address by SLAAC (the controller's `dhcpdv6_allow_slaac`). The UI of a UniFi gateway stores `true` on a network with prefix delegation. Leave it unset to keep the value the controller holds: the provider then does not send the key and does not read it.
 - `dns_auto` (Boolean) Specifies whether DNS auto-discovery is enabled for DHCPv6.
 - `dns_servers` (List of String) List of DNS server addresses for DHCPv6 clients (maximum 4).
 - `enabled` (Boolean) Specifies whether the DHCPv6 server is enabled.
