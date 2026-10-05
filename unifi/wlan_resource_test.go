@@ -1369,6 +1369,7 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 	r := &wlanFrameworkResource{}
 
 	saeSync := int64(5)
+	rssi6E := int64(-88)
 	live := &unifi.WLAN{
 		ID:                        "6abc",
 		Name:                      "old",
@@ -1381,6 +1382,7 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 		BroadcastFilterList:       []string{"aa:bb:cc:dd:ee:ff"},
 		RADIUSMACaclFormat:        "none",
 		MinrateNgAdvertisingRates: true,
+		RoamingAssistant6ERssi:    &rssi6E,
 	}
 
 	plan := wlanFrameworkResourceModel{
@@ -1416,6 +1418,12 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 	}
 	if got.MdnsProxyMode != "off" || got.SettingPreference != "manual" || got.RADIUSMACaclFormat != "none" || !got.MinrateNgAdvertisingRates {
 		t.Errorf("an undeclared field lost its live value: %+v", got)
+	}
+	if got.RoamingAssistant6ERssi == nil || *got.RoamingAssistant6ERssi != -88 {
+		t.Errorf(
+			"RoamingAssistant6ERssi = %v, want the live 6 GHz threshold",
+			got.RoamingAssistant6ERssi,
+		)
 	}
 	if len(got.ApGroupIDs) != 1 || got.ApGroupIDs[0] != "group-plan" {
 		t.Errorf("ApGroupIDs = %v, want the planned list to replace the live one", got.ApGroupIDs)
