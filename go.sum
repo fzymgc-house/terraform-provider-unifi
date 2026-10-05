@@ -159,8 +159,8 @@ github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/fvbommel/sortorder v1.1.0 h1:fUmoe+HLsBTctBDoaBwpQo5N+nrCp8g/BjKb/6ZQmYw=
 github.com/fvbommel/sortorder v1.1.0/go.mod h1:uk88iVf1ovNn1iLfgUVU2F9o5eO30ui720w+kxuqRs0=
-github.com/fzymgc-house/go-unifi v0.0.0-20261005001451-9f054b7d2f2a h1:ABC4z9sOnh563ld7z/zC9n9D0fNZPRiq8DXHFQao1nk=
-github.com/fzymgc-house/go-unifi v0.0.0-20261005001451-9f054b7d2f2a/go.mod h1:Nnp+DsBAf+80/5BZnN7Id0t5HUuigZ+rwGlXRGrYkTM=
+github.com/fzymgc-house/go-unifi v0.0.0-20261005133838-8e50173c6403 h1:+elutnbjDjeVCloGnJjhX2rHkH1Ug7tYPXQD43hr/9E=
+github.com/fzymgc-house/go-unifi v0.0.0-20261005133838-8e50173c6403/go.mod h1:Nnp+DsBAf+80/5BZnN7Id0t5HUuigZ+rwGlXRGrYkTM=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 h1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376/go.mod h1:an3vInlBmSxCcxctByoQdvwPiA7DTK7jaaFDBTtu0ic=
 github.com/go-git/go-billy/v5 v5.8.0 h1:I8hjc3LbBlXTtVuFNJuwYuMiHvQJDq1AT6u4DwDzZG0=
