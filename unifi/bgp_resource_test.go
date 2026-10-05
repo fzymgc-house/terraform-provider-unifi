@@ -931,3 +931,56 @@ func Test_bgpResource_bgpToModel(t *testing.T) {
 		})
 	}
 }
+
+// The controller replaces the whole BGP configuration on every write. planOntoBGP lays the plan
+// over the configuration as the controller holds it, so a key the resource never sets keeps its
+// live value, and error, which the controller sets, never goes out.
+func Test_bgpResource_planOntoBGP_keepsLiveFields(t *testing.T) {
+	ctx := context.Background()
+	r := &bgpResource{}
+
+	liveError := true
+	live := &unifi.BGPConfig{
+		ID:                      "6ac2ccc4535c0e4cd8a8e1a2",
+		Config:                  "router bgp 65000",
+		Description:             "old",
+		Error:                   &liveError,
+		DeviceMAC:               "aa:bb:cc:dd:ee:ff",
+		RedistributeToSdWAN:     true,
+		RedistributeToSdWANType: "e1",
+		UploadedFileName:        "old.conf",
+	}
+
+	plan := &bgpResourceModel{
+		Enabled:  types.BoolValue(true),
+		Config:   types.StringValue("router bgp 65000\n bgp router-id 192.168.200.1"),
+		ASN:      types.Int64Null(),
+		RouterID: types.StringNull(),
+		Peers: types.ListNull(
+			types.ObjectType{AttrTypes: bgpPeerModel{}.AttributeTypes()},
+		),
+		UploadFileName: types.StringValue("bgpd.conf"),
+		Description:    types.StringValue("new"),
+	}
+
+	got, diags := r.planOntoBGP(ctx, plan, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoBGP() diagnostics: %v", diags)
+	}
+	want := &unifi.BGPConfig{
+		ID:                      "6ac2ccc4535c0e4cd8a8e1a2",
+		Config:                  "router bgp 65000\n bgp router-id 192.168.200.1",
+		Description:             "new",
+		Enabled:                 true,
+		DeviceMAC:               "aa:bb:cc:dd:ee:ff",
+		RedistributeToSdWAN:     true,
+		RedistributeToSdWANType: "e1",
+		UploadedFileName:        "bgpd.conf",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("planOntoBGP() = %+v, want %+v", got, want)
+	}
+	if live.Error == nil || !*live.Error || live.Description != "old" {
+		t.Errorf("planOntoBGP changed its base: %+v", live)
+	}
+}
