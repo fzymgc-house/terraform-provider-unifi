@@ -2,13 +2,20 @@ package unifi
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	fwlist "github.com/hashicorp/terraform-plugin-framework/list"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/ubiquiti-community/go-unifi/unifi"
 )
@@ -846,4 +853,268 @@ func Test_wanResource_ListResourceConfigSchema(t *testing.T) {
 
 func Test_wanResource_List(t *testing.T) {
 	t.Skip("requires configured client")
+}
+
+// wanLiveNetworkJSON has the keys of a WAN network on Network 10.6.
+const wanLiveNetworkJSON = `{
+	"_id": "6abc00000000000000000001",
+	"attr_hidden_id": "WAN",
+	"attr_no_delete": true,
+	"enabled": true,
+	"external_id": "0d6a3c1e-5b7f-4a2d-9c8e-1f2a3b4c5d6e",
+	"firewall_zone_id": "6abc00000000000000000003",
+	"igmp_proxy_for": "none",
+	"igmp_proxy_upstream": false,
+	"ipv6_setting_preference": "manual",
+	"ipv6_wan_delegation_type": "pd",
+	"is_wifi_tethering": false,
+	"mac_override_enabled": false,
+	"name": "Internet 1",
+	"purpose": "wan",
+	"report_wan_event": false,
+	"routing_table_id": 201,
+	"setting_preference": "manual",
+	"single_network_lan": "",
+	"site_id": "6abc00000000000000000002",
+	"uplink_identity": "",
+	"wan_dhcp_cos": 0,
+	"wan_dhcp_options": [],
+	"wan_dhcpv6_cos": 0,
+	"wan_dhcpv6_options": [],
+	"wan_dhcpv6_pd_size": 56,
+	"wan_dhcpv6_pd_size_auto": false,
+	"wan_dns1": "192.0.2.53",
+	"wan_dns2": "",
+	"wan_dns_preference": "manual",
+	"wan_dslite_remote_host_auto": false,
+	"wan_failover_priority": 1,
+	"wan_ip_aliases": [],
+	"wan_ipv6_dns1": "",
+	"wan_ipv6_dns2": "",
+	"wan_ipv6_dns_preference": "auto",
+	"wan_load_balance_type": "weighted",
+	"wan_load_balance_weight": 99,
+	"wan_networkgroup": "WAN",
+	"wan_provider_capabilities": {
+		"download_kilobits_per_second": 1000000,
+		"upload_kilobits_per_second": 1000000
+	},
+	"wan_smartq_enabled": false,
+	"wan_type": "dhcp",
+	"wan_type_v6": "slaac",
+	"wan_vlan_enabled": false
+}`
+
+const wanLiveNetworkID = "6abc00000000000000000001"
+
+// importedWANModel reads the live WAN network into a model, as an import does.
+func importedWANModel(
+	ctx context.Context,
+	t *testing.T,
+	r *wanResource,
+) (*wanResourceModel, *unifi.Network) {
+	t.Helper()
+	var live unifi.Network
+	if err := json.Unmarshal([]byte(wanLiveNetworkJSON), &live); err != nil {
+		t.Fatalf("unmarshal the live network: %v", err)
+	}
+	model := &wanResourceModel{}
+	applyWANDefaults(model)
+	if diags := r.networkToModel(ctx, &live, model, "default"); diags.HasError() {
+		t.Fatalf("networkToModel() diagnostics: %v", diags)
+	}
+	return model, &live
+}
+
+// assertWANRequestKeepsLiveKeys fails when the request body lacks a key of the live WAN
+// network, or holds another value for it. The name is the one key that the callers plan.
+func assertWANRequestKeepsLiveKeys(t *testing.T, body []byte, wantName string) {
+	t.Helper()
+	var want, sent map[string]any
+	if err := json.Unmarshal([]byte(wanLiveNetworkJSON), &want); err != nil {
+		t.Fatalf("unmarshal the fixture: %v", err)
+	}
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("unmarshal the request %q: %v", body, err)
+	}
+	want["name"] = wantName
+	for key, value := range want {
+		sentValue, ok := sent[key]
+		if !ok {
+			t.Errorf("the request lost %s", key)
+		} else if !reflect.DeepEqual(sentValue, value) {
+			t.Errorf("the request holds %s = %v, want %v", key, sentValue, value)
+		}
+	}
+}
+
+// newWANFakeControllerClient serves the live WAN network from a fake controller (old-style
+// API: 302 on /, cookie login at /api/login) and records the body of each PUT in sent.
+func newWANFakeControllerClient(t *testing.T, sent *[]byte) *Client {
+	t.Helper()
+
+	envelope := func(w http.ResponseWriter, object []byte) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"meta":{"rc":"ok"},"data":[` + string(object) + `]}`))
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/manage", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("/api/login", func(w http.ResponseWriter, _ *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "unifises", Value: "fake-session", Path: "/"})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"meta":{"rc":"ok"},"data":[]}`))
+	})
+	mux.HandleFunc("/api/s/default/rest/networkconf", func(w http.ResponseWriter, _ *http.Request) {
+		envelope(w, []byte(wanLiveNetworkJSON))
+	})
+	mux.HandleFunc(
+		"/api/s/default/rest/networkconf/"+wanLiveNetworkID,
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPut {
+				envelope(w, []byte(wanLiveNetworkJSON))
+				return
+			}
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read the request: %v", err)
+			}
+			*sent = body
+			envelope(w, body)
+		},
+	)
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	apiClient, err := unifi.New(context.Background(), &unifi.Config{
+		BaseURL:  srv.URL,
+		Username: "admin",
+		Password: "admin",
+	})
+	if err != nil {
+		t.Fatalf("creating client against fake controller: %v", err)
+	}
+	return &Client{ApiClient: apiClient, Site: "default"}
+}
+
+// The controller replaces the whole WAN network on update, and unifi_wan declares only part of
+// it. An update of an imported WAN network must send each key that the controller holds, with
+// the value that the controller holds.
+func Test_wanResource_planOntoNetwork_keepsLiveKeys(t *testing.T) {
+	ctx := context.Background()
+	r := &wanResource{}
+	model, live := importedWANModel(ctx, t, r)
+
+	got, diags := r.planOntoNetwork(ctx, model, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoNetwork() diagnostics: %v", diags)
+	}
+	got.ID = live.ID
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal the request: %v", err)
+	}
+	assertWANRequestKeepsLiveKeys(t, body, "Internet 1")
+
+	model.Name = types.StringValue("Fiber")
+	renamed, diags := r.planOntoNetwork(ctx, model, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoNetwork() diagnostics: %v", diags)
+	}
+	if renamed.Name == nil || *renamed.Name != "Fiber" {
+		t.Errorf("Name = %v, want the planned name", renamed.Name)
+	}
+	if live.Name == nil || *live.Name != "Internet 1" {
+		t.Errorf("planOntoNetwork changed its base: Name = %v", live.Name)
+	}
+
+	fresh, diags := r.planOntoNetwork(ctx, model, nil)
+	if diags.HasError() {
+		t.Fatalf("planOntoNetwork(nil) diagnostics: %v", diags)
+	}
+	if fresh.ExternalID != "" || fresh.RoutingTableID != nil || fresh.FirewallZoneID != nil {
+		t.Errorf("a create must start from an empty network: %+v", fresh)
+	}
+}
+
+// Update must read the live WAN network and lay the plan over it. A plan that changes only the
+// name must reach the controller with every other key of the live network.
+func Test_wanResource_Update_keepsLiveKeys(t *testing.T) {
+	ctx := context.Background()
+	var sent []byte
+	r := &wanResource{client: newWANFakeControllerClient(t, &sent)}
+
+	var schemaResp fwresource.SchemaResponse
+	r.Schema(ctx, fwresource.SchemaRequest{}, &schemaResp)
+	var identityResp fwresource.IdentitySchemaResponse
+	r.IdentitySchema(ctx, fwresource.IdentitySchemaRequest{}, &identityResp)
+	schemaType := schemaResp.Schema.Type().TerraformType(ctx)
+	timeoutsType, ok := schemaResp.Schema.Type().(types.ObjectType).AttrTypes["timeouts"].(timeouts.Type)
+	if !ok {
+		t.Fatal("the schema has no timeouts attribute")
+	}
+
+	model, _ := importedWANModel(ctx, t, r)
+	model.Timeouts = timeouts.Value{Object: types.ObjectNull(timeoutsType.AttrTypes)}
+	state := tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(schemaType, nil)}
+	if diags := state.Set(ctx, model); diags.HasError() {
+		t.Fatalf("set the state: %v", diags)
+	}
+	model.Name = types.StringValue("Fiber")
+	plan := tfsdk.Plan{Schema: schemaResp.Schema, Raw: tftypes.NewValue(schemaType, nil)}
+	if diags := plan.Set(ctx, model); diags.HasError() {
+		t.Fatalf("set the plan: %v", diags)
+	}
+
+	resp := &fwresource.UpdateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(schemaType, nil)},
+		Identity: &tfsdk.ResourceIdentity{
+			Schema: identityResp.IdentitySchema,
+			Raw: tftypes.NewValue(
+				identityResp.IdentitySchema.Type().TerraformType(ctx),
+				nil,
+			),
+		},
+	}
+	r.Update(ctx, fwresource.UpdateRequest{State: state, Plan: plan}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update() diagnostics: %v", resp.Diagnostics)
+	}
+	if sent == nil {
+		t.Fatal("Update() sent no request")
+	}
+	assertWANRequestKeepsLiveKeys(t, sent, "Fiber")
+}
+
+// A create that meets an existing WAN network of the same group adopts it. The adoption must
+// lay the plan over the existing network and keep every key that the plan does not state.
+func Test_wanResource_adoptExistingWAN_keepsLiveKeys(t *testing.T) {
+	ctx := context.Background()
+	var sent []byte
+	r := &wanResource{client: newWANFakeControllerClient(t, &sent)}
+
+	plan := &wanResourceModel{}
+	applyWANDefaults(plan)
+	plan.Name = types.StringValue("Fiber")
+	plan.NetworkGroup = types.StringValue("WAN")
+	plan.Type = types.StringValue("dhcp")
+	plan.Enabled = types.BoolValue(true)
+
+	network, diags := r.modelToNetwork(ctx, plan)
+	if diags.HasError() {
+		t.Fatalf("modelToNetwork() diagnostics: %v", diags)
+	}
+	if _, err := r.adoptExistingWAN(ctx, "default", plan, network); err != nil {
+		t.Fatalf("adoptExistingWAN(): %v", err)
+	}
+	if sent == nil {
+		t.Fatal("adoptExistingWAN() sent no request")
+	}
+	assertWANRequestKeepsLiveKeys(t, sent, "Fiber")
 }
