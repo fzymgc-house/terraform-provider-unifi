@@ -335,22 +335,33 @@ func (r *bgpResource) Create(
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	// Convert to unifi.BGPConfig
-	bgpConfig, d := r.modelToBGP(ctx, &data)
-	resp.Diagnostics.Append(d...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	site := data.Site.ValueString()
 	if site == "" {
 		site = r.client.Site
 	}
 
+	// The site holds at most one BGP configuration, and a create posts the whole object. If the
+	// site already holds one, lay the plan over it, as an update does.
+	live, err := r.client.GetBGPConfig(ctx, site)
+	if err != nil {
+		if _, ok := err.(*unifi.NotFoundError); !ok {
+			resp.Diagnostics.AddError(
+				"Error Reading BGP Configuration",
+				"Could not read the BGP configuration before the create: "+err.Error(),
+			)
+			return
+		}
+		live = nil
+	}
+	bgpConfig, d := r.planOntoBGP(ctx, &data, live)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Create the BGP configuration
 	// Create the BGP configuration with retry for "not found" errors
 	var createdBGPConfig *unifi.BGPConfig
-	var err error
 
 	maxRetries := 3
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -487,8 +498,18 @@ func (r *bgpResource) Update(
 		site = r.client.Site
 	}
 
-	// Convert the updated state to API format
-	bgpConfig, d := r.modelToBGP(ctx, &state)
+	// Read the configuration as the controller holds it, then lay the plan over it. The
+	// controller replaces the whole object on update, so a fresh struct would delete every key
+	// the resource does not declare.
+	live, err := r.client.GetBGPConfig(ctx, site)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading BGP Configuration",
+			"Could not read the BGP configuration before the update: "+err.Error(),
+		)
+		return
+	}
+	bgpConfig, d := r.planOntoBGP(ctx, &state, live)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -679,6 +700,19 @@ func (r *bgpResource) modelToBGP(
 	ctx context.Context,
 	model *bgpResourceModel,
 ) (*unifi.BGPConfig, diag.Diagnostics) {
+	return r.planOntoBGP(ctx, model, nil)
+}
+
+// planOntoBGP lays the model over base, the BGP configuration as the controller holds it, and
+// returns the object to send. The controller replaces the whole object on every write, and the
+// resource declares only part of it, so every key the resource does not set keeps its live
+// value. A nil base starts from an empty object. error is a status the controller sets, and the
+// UI never sends it, so the object to send never carries it.
+func (r *bgpResource) planOntoBGP(
+	ctx context.Context,
+	model *bgpResourceModel,
+	base *unifi.BGPConfig,
+) (*unifi.BGPConfig, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	configStr := model.Config.ValueString()
@@ -693,12 +727,16 @@ func (r *bgpResource) modelToBGP(
 		configStr = rendered
 	}
 
-	bgpConfig := &unifi.BGPConfig{
-		Enabled:          model.Enabled.ValueBool(),
-		Config:           configStr,
-		UploadedFileName: model.UploadFileName.ValueString(),
-		Description:      model.Description.ValueString(),
+	bgpConfig := &unifi.BGPConfig{}
+	if base != nil {
+		live := *base
+		bgpConfig = &live
 	}
+	bgpConfig.Enabled = model.Enabled.ValueBool()
+	bgpConfig.Config = configStr
+	bgpConfig.UploadedFileName = model.UploadFileName.ValueString()
+	bgpConfig.Description = model.Description.ValueString()
+	bgpConfig.Error = nil
 
 	return bgpConfig, diags
 }
