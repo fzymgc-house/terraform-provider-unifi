@@ -2,6 +2,7 @@ package unifi
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -846,4 +847,117 @@ func Test_wanResource_ListResourceConfigSchema(t *testing.T) {
 
 func Test_wanResource_List(t *testing.T) {
 	t.Skip("requires configured client")
+}
+
+// The controller replaces the whole WAN network on update, and unifi_wan declares only part of
+// it. An update of an imported WAN network must send each key that the controller holds, with
+// the value that the controller holds. The fixture has the keys of a WAN network on Network
+// 10.6.
+func Test_wanResource_planOntoNetwork_keepsLiveKeys(t *testing.T) {
+	const liveJSON = `{
+		"_id": "6abc00000000000000000001",
+		"attr_hidden_id": "WAN",
+		"attr_no_delete": true,
+		"enabled": true,
+		"external_id": "0d6a3c1e-5b7f-4a2d-9c8e-1f2a3b4c5d6e",
+		"firewall_zone_id": "6abc00000000000000000003",
+		"igmp_proxy_for": "none",
+		"igmp_proxy_upstream": false,
+		"ipv6_setting_preference": "manual",
+		"ipv6_wan_delegation_type": "pd",
+		"is_wifi_tethering": false,
+		"mac_override_enabled": false,
+		"name": "Internet 1",
+		"purpose": "wan",
+		"report_wan_event": false,
+		"routing_table_id": 201,
+		"setting_preference": "manual",
+		"single_network_lan": "",
+		"site_id": "6abc00000000000000000002",
+		"uplink_identity": "",
+		"wan_dhcp_cos": 0,
+		"wan_dhcp_options": [],
+		"wan_dhcpv6_cos": 0,
+		"wan_dhcpv6_options": [],
+		"wan_dhcpv6_pd_size": 56,
+		"wan_dhcpv6_pd_size_auto": false,
+		"wan_dns1": "192.0.2.53",
+		"wan_dns2": "",
+		"wan_dns_preference": "manual",
+		"wan_dslite_remote_host_auto": false,
+		"wan_failover_priority": 1,
+		"wan_ip_aliases": [],
+		"wan_ipv6_dns1": "",
+		"wan_ipv6_dns2": "",
+		"wan_ipv6_dns_preference": "auto",
+		"wan_load_balance_type": "weighted",
+		"wan_load_balance_weight": 99,
+		"wan_networkgroup": "WAN",
+		"wan_provider_capabilities": {
+			"download_kilobits_per_second": 1000000,
+			"upload_kilobits_per_second": 1000000
+		},
+		"wan_smartq_enabled": false,
+		"wan_type": "dhcp",
+		"wan_type_v6": "slaac",
+		"wan_vlan_enabled": false
+	}`
+
+	ctx := context.Background()
+	r := &wanResource{}
+
+	var live unifi.Network
+	if err := json.Unmarshal([]byte(liveJSON), &live); err != nil {
+		t.Fatalf("unmarshal the live network: %v", err)
+	}
+	model := &wanResourceModel{}
+	applyWANDefaults(model)
+	if diags := r.networkToModel(ctx, &live, model, "default"); diags.HasError() {
+		t.Fatalf("networkToModel() diagnostics: %v", diags)
+	}
+
+	got, diags := r.planOntoNetwork(ctx, model, &live)
+	if diags.HasError() {
+		t.Fatalf("planOntoNetwork() diagnostics: %v", diags)
+	}
+	got.ID = live.ID
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal the request: %v", err)
+	}
+	var want, sent map[string]any
+	if err := json.Unmarshal([]byte(liveJSON), &want); err != nil {
+		t.Fatalf("unmarshal the fixture: %v", err)
+	}
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("unmarshal the request: %v", err)
+	}
+	for key, value := range want {
+		sentValue, ok := sent[key]
+		if !ok {
+			t.Errorf("the request lost %s", key)
+		} else if !reflect.DeepEqual(sentValue, value) {
+			t.Errorf("the request holds %s = %v, want the live value %v", key, sentValue, value)
+		}
+	}
+
+	model.Name = types.StringValue("Fiber")
+	renamed, diags := r.planOntoNetwork(ctx, model, &live)
+	if diags.HasError() {
+		t.Fatalf("planOntoNetwork() diagnostics: %v", diags)
+	}
+	if renamed.Name == nil || *renamed.Name != "Fiber" {
+		t.Errorf("Name = %v, want the planned name", renamed.Name)
+	}
+	if live.Name == nil || *live.Name != "Internet 1" {
+		t.Errorf("planOntoNetwork changed its base: Name = %v", live.Name)
+	}
+
+	fresh, diags := r.planOntoNetwork(ctx, model, nil)
+	if diags.HasError() {
+		t.Fatalf("planOntoNetwork(nil) diagnostics: %v", diags)
+	}
+	if fresh.ExternalID != "" || fresh.RoutingTableID != nil || fresh.FirewallZoneID != nil {
+		t.Errorf("a create must start from an empty network: %+v", fresh)
+	}
 }
