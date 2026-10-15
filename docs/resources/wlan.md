@@ -111,6 +111,11 @@ resource "unifi_wlan" "wifi" {
 - `proxy_arp` (Boolean) Reduces airtime usage by allowing APs to "proxy" common broadcast frames as unicast.
 - `radius_mac_auth_enabled` (Boolean) Enable RADIUS MAC authentication.
 - `radius_profile_id` (String) ID of the RADIUS profile to use when security `wpaeap`. The controller may assign a default profile, so this is computed when unset.
+- `roaming_assistant_6e_enabled` (Boolean) Enable the roaming assistant on 6 GHz. See `roaming_assistant_na_enabled`. Unset, the controller keeps its own value.
+- `roaming_assistant_6e_rssi` (Number) The 6 GHz roaming assistant threshold in dBm, for example `-88`. Unset, the controller keeps its own value, and null when the WLAN holds none.
+- `roaming_assistant_na_enabled` (Boolean) Enable the roaming assistant on 5 GHz: the access point drops a client whose signal is below `roaming_assistant_na_rssi`, so it looks for a closer radio. Unset, the controller keeps its own value.
+- `roaming_assistant_na_rssi` (Number) The 5 GHz roaming assistant threshold in dBm, for example `-77`. Unset, the controller keeps its own value, and null when the WLAN holds none.
+- `rrm_enabled` (Boolean) Enable 802.11k neighbour reports, so a client learns the nearby access points from the one it is on. Unset, the controller keeps its own value.
 - `schedule` (Block List) Start and stop schedules for the WLAN (see [below for nested schema](#nestedblock--schedule))
 - `site` (String) The name of the site to associate the WLAN with.
 - `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))

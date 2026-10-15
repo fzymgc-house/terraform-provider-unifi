@@ -1397,7 +1397,10 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 		PrivatePresharedKeys: types.ListNull(
 			types.ObjectType{AttrTypes: wlanPrivatePresharedKeyModel{}.AttributeTypes()},
 		),
-		ApGroupIDs:          types.SetValueMust(types.StringType, []attr.Value{types.StringValue("group-plan")}),
+		ApGroupIDs: types.SetValueMust(
+			types.StringType,
+			[]attr.Value{types.StringValue("group-plan")},
+		),
 		WLANBands:           types.SetNull(types.StringType),
 		Schedule:            types.ListNull(types.ObjectType{}),
 		BroadcastFilterList: types.SetNull(types.StringType),
@@ -1441,6 +1444,78 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 	}
 	if fresh.Passphrase != "" || fresh.SaeGroups != nil {
 		t.Errorf("a create must start from an empty WLAN: %+v", fresh)
+	}
+}
+
+// The roaming fields are managed only when stated. A plan that leaves them unset keeps the live
+// values on an update, a plan that states them writes them, and a read maps a key the
+// controller omits to null rather than to a value.
+func Test_wlanFrameworkResource_roamingFields(t *testing.T) {
+	ctx := context.Background()
+	r := &wlanFrameworkResource{}
+
+	naOn, rssiNa := true, int64(-75)
+	live := &unifi.WLAN{
+		ID:                        "6abc",
+		RrmEnabled:                true,
+		RoamingAssistantNaEnabled: &naOn,
+		RoamingAssistantNaRssi:    &rssiNa,
+	}
+	unset := wlanFrameworkResourceModel{
+		ID:       types.StringValue("6abc"),
+		Name:     types.StringValue("w"),
+		Security: types.StringValue("wpapsk"),
+		MacFilter: types.ObjectNull(map[string]attr.Type{
+			"enabled": types.BoolType,
+			"list":    types.SetType{ElemType: types.StringType},
+			"policy":  types.StringType,
+		}),
+		PrivatePresharedKeys: types.ListNull(
+			types.ObjectType{AttrTypes: wlanPrivatePresharedKeyModel{}.AttributeTypes()},
+		),
+		ApGroupIDs:          types.SetNull(types.StringType),
+		WLANBands:           types.SetNull(types.StringType),
+		Schedule:            types.ListNull(types.ObjectType{}),
+		BroadcastFilterList: types.SetNull(types.StringType),
+	}
+
+	got, diags := r.planOntoWLAN(ctx, unset, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoWLAN() diagnostics: %v", diags)
+	}
+	if !got.RrmEnabled || got.RoamingAssistantNaEnabled == nil || !*got.RoamingAssistantNaEnabled ||
+		got.RoamingAssistantNaRssi == nil || *got.RoamingAssistantNaRssi != -75 {
+		t.Errorf("an unset roaming field lost its live value: %+v", got)
+	}
+	if got.RoamingAssistant6EEnabled != nil || got.RoamingAssistant6ERssi != nil {
+		t.Errorf("a 6 GHz key the WLAN does not hold was sent: %+v", got)
+	}
+
+	stated := unset
+	stated.RrmEnabled = types.BoolValue(false)
+	stated.RoamingAssistant6EEnabled = types.BoolValue(true)
+	stated.RoamingAssistant6ERssi = types.Int64Value(-88)
+	got, diags = r.planOntoWLAN(ctx, stated, live)
+	if diags.HasError() {
+		t.Fatalf("planOntoWLAN() diagnostics: %v", diags)
+	}
+	if got.RrmEnabled || got.RoamingAssistant6EEnabled == nil || !*got.RoamingAssistant6EEnabled ||
+		got.RoamingAssistant6ERssi == nil || *got.RoamingAssistant6ERssi != -88 {
+		t.Errorf("a stated roaming field was not written: %+v", got)
+	}
+
+	var model wlanFrameworkResourceModel
+	model.MacFilter = unset.MacFilter
+	model.PrivatePresharedKeys = unset.PrivatePresharedKeys
+	if diags := r.wlanToModel(ctx, live, &model, "default"); diags.HasError() {
+		t.Fatalf("wlanToModel() diagnostics: %v", diags)
+	}
+	if !model.RrmEnabled.ValueBool() || !model.RoamingAssistantNaEnabled.ValueBool() ||
+		model.RoamingAssistantNaRssi.ValueInt64() != -75 {
+		t.Errorf("a live roaming field did not reach the model: %+v", model)
+	}
+	if !model.RoamingAssistant6EEnabled.IsNull() || !model.RoamingAssistant6ERssi.IsNull() {
+		t.Errorf("a key the controller omits must read as null: %+v", model)
 	}
 }
 
