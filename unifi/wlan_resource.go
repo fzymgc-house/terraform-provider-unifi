@@ -268,6 +268,7 @@ type wlanFrameworkResourceModel struct {
 	PMFMode                     types.String `tfsdk:"pmf_mode"`
 	Passphrase                  types.String `tfsdk:"passphrase"`
 	PassphraseWO                types.String `tfsdk:"passphrase_wo"`
+	PassphraseWOVersion         types.Int64  `tfsdk:"passphrase_wo_version"`
 	HideSSID                    types.Bool   `tfsdk:"hide_ssid"`
 	IsGuest                     types.Bool   `tfsdk:"is_guest"`
 	Enabled                     types.Bool   `tfsdk:"enabled"`
@@ -292,6 +293,7 @@ type wlanFrameworkResourceModel struct {
 	BssTransition               types.Bool   `tfsdk:"bss_transition"`
 	Uapsd                       types.Bool   `tfsdk:"uapsd"`
 	FastRoamingEnabled          types.Bool   `tfsdk:"fast_roaming_enabled"`
+	RrmEnabled                  types.Bool   `tfsdk:"rrm_enabled"`
 	MinimumDataRate2GKbps       types.Int64  `tfsdk:"minimum_data_rate_2g_kbps"`
 	MinimumDataRate5GKbps       types.Int64  `tfsdk:"minimum_data_rate_5g_kbps"`
 	MinrateSettingPreference    types.String `tfsdk:"minrate_setting_preference"`
@@ -488,6 +490,16 @@ func (r *wlanFrameworkResource) Schema(
 					stringvalidator.ConflictsWith(path.MatchRoot("passphrase")),
 				},
 			},
+			"passphrase_wo_version": schema.Int64Attribute{
+				MarkdownDescription: "A version number for `passphrase_wo`. Terraform never compares a " +
+					"write-only value, so a new passphrase in its source produces no update on " +
+					"its own. Change this number whenever the passphrase changes, and the next " +
+					"apply sends the new `passphrase_wo` to the controller.",
+				Optional: true,
+				Validators: []validator.Int64{
+					int64validator.AlsoRequires(path.MatchRoot("passphrase_wo")),
+				},
+			},
 			"hide_ssid": schema.BoolAttribute{
 				MarkdownDescription: "Indicates whether or not to hide the SSID from broadcast.",
 				Optional:            true,
@@ -665,10 +677,12 @@ func (r *wlanFrameworkResource) Schema(
 						ElementType:         types.StringType,
 					},
 					"policy": schema.StringAttribute{
-						MarkdownDescription: "MAC address filter policy (only valid if `enabled` is `true`).",
-						Optional:            true,
-						Computed:            true,
-						Default:             stringdefault.StaticString("deny"),
+						MarkdownDescription: "MAC address filter policy (only valid if `enabled` is `true`). " +
+							"Unset, the controller keeps its own value. A default here would plan " +
+							"a change on every WLAN the UI created, because the framework applies " +
+							"a nested default even when `mac_filter` is absent from the config.",
+						Optional: true,
+						Computed: true,
 						Validators: []validator.String{
 							stringvalidator.OneOf("allow", "deny"),
 						},
@@ -779,6 +793,15 @@ func (r *wlanFrameworkResource) Schema(
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+			},
+			"rrm_enabled": schema.BoolAttribute{
+				MarkdownDescription: "Enable 802.11k neighbour reports, so a client learns the nearby " +
+					"access points from the one it is on. Unset, the controller keeps its own value.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"minimum_data_rate_2g_kbps": schema.Int64Attribute{
 				MarkdownDescription: "Minimum data rate for 2G clients in Kbps. " +
@@ -1103,6 +1126,15 @@ func nestWLANState(state map[string]any) {
 	util.NestFields(state, "ap_group", map[string]string{
 		"ap_group_ids":  "ids",
 		"ap_group_mode": "mode",
+	})
+	// The fzymgc-house fork of v1 held the roaming assistant as flat attributes.
+	util.NestFields(state, "roaming_assistant_na", map[string]string{
+		"roaming_assistant_na_enabled": "enabled",
+		"roaming_assistant_na_rssi":    "rssi",
+	})
+	util.NestFields(state, "roaming_assistant_6e", map[string]string{
+		"roaming_assistant_6e_enabled": "enabled",
+		"roaming_assistant_6e_rssi":    "rssi",
 	})
 	util.EachObject(state, "schedule", func(sched map[string]any) {
 		util.NestFields(sched, "start", map[string]string{
@@ -1625,8 +1657,18 @@ func (r *wlanFrameworkResource) Update(
 		site = r.client.Site
 	}
 
-	// Step 3: Convert the updated state to API format
-	wlan, diags := r.planToWLAN(ctx, state)
+	// Step 3: Read the WLAN as the controller holds it, then lay the plan over it. The
+	// controller replaces the whole object on update, so a fresh struct would delete every
+	// field the resource does not declare.
+	live, err := r.client.GetWLAN(ctx, site, state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading WLAN",
+			"Could not read WLAN "+state.ID.ValueString()+" before the update: "+err.Error(),
+		)
+		return
+	}
+	wlan, diags := r.planOntoWLAN(ctx, state, live)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1787,6 +1829,12 @@ func (r *wlanFrameworkResource) applyPlanToState(
 	if !plan.FastRoamingEnabled.IsNull() && !plan.FastRoamingEnabled.IsUnknown() {
 		state.FastRoamingEnabled = plan.FastRoamingEnabled
 	}
+	if !plan.RrmEnabled.IsNull() && !plan.RrmEnabled.IsUnknown() {
+		state.RrmEnabled = plan.RrmEnabled
+	}
+	// The version is a plain marker with no controller side, so a removal from the config
+	// clears it too.
+	state.PassphraseWOVersion = plan.PassphraseWOVersion
 	if !plan.MinimumDataRate2GKbps.IsNull() && !plan.MinimumDataRate2GKbps.IsUnknown() {
 		state.MinimumDataRate2GKbps = plan.MinimumDataRate2GKbps
 	}
@@ -1935,44 +1983,73 @@ func (r *wlanFrameworkResource) planToWLAN(
 	ctx context.Context,
 	plan wlanFrameworkResourceModel,
 ) (*unifi.WLAN, diag.Diagnostics) {
+	return r.planOntoWLAN(ctx, plan, nil)
+}
+
+// planOntoWLAN lays the plan over base, the WLAN as the controller holds it, and returns the
+// object to send. The controller replaces the whole WLAN on update, and the resource declares
+// only part of it, so every field the resource does not set keeps its live value (the SAE
+// parameters, the mDNS proxy mode, the minimum-rate advertising lists). A nil base is a create.
+func (r *wlanFrameworkResource) planOntoWLAN(
+	ctx context.Context,
+	plan wlanFrameworkResourceModel,
+	base *unifi.WLAN,
+) (*unifi.WLAN, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	wlan := &unifi.WLAN{
-		ID:                       plan.ID.ValueString(),
-		Name:                     plan.Name.ValueString(),
-		NetworkID:                plan.NetworkID.ValueString(),
-		UserGroupID:              plan.UserGroupID.ValueString(),
-		Security:                 plan.Security.ValueString(),
-		PMFMode:                  plan.PMFMode.ValueString(),
-		Passphrase:               plan.Passphrase.ValueString(),
-		HideSSID:                 plan.HideSSID.ValueBool(),
-		IsGuest:                  plan.IsGuest.ValueBool(),
-		Enabled:                  plan.Enabled.ValueBool(),
-		VLANEnabled:              plan.VLANEnabled.ValueBool(),
-		VLAN:                     plan.VLAN.ValueInt64Pointer(),
-		MulticastEnhanceEnabled:  plan.MulticastEnhance.ValueBool(),
-		NasIDentifierType:        plan.NasIDentifierType.ValueString(),
-		No2GhzOui:                plan.No2GhzOui.ValueBool(),
-		L2Isolation:              plan.L2Isolation.ValueBool(),
-		ProxyArp:                 plan.ProxyArp.ValueBool(),
-		BssTransition:            plan.BssTransition.ValueBool(),
-		UapsdEnabled:             plan.Uapsd.ValueBool(),
-		FastRoamingEnabled:       plan.FastRoamingEnabled.ValueBool(),
-		MinrateSettingPreference: plan.MinrateSettingPreference.ValueString(),
-		MinrateNgEnabled:         plan.MinimumDataRate2GKbps.ValueInt64() > 0,
-		MinrateNgDataRateKbps:    plan.MinimumDataRate2GKbps.ValueInt64Pointer(),
-		MinrateNaEnabled:         plan.MinimumDataRate5GKbps.ValueInt64() > 0,
-		MinrateNaDataRateKbps:    plan.MinimumDataRate5GKbps.ValueInt64Pointer(),
-
-		GroupRekey:         plan.GroupRekey.ValueInt64Pointer(),
-		DTIMMode:           plan.DTIMMode.ValueString(),
-		NameCombineEnabled: true,
-
-		IappEnabled:         plan.IappEnabled.ValueBool(),
-		EnhancedIot:         plan.EnhancedIot.ValueBool(),
-		Hotspot2ConfEnabled: plan.Hotspot2ConfEnabled.ValueBool(),
-		MloEnabled:          plan.MloEnabled.ValueBool(),
+	wlan := &unifi.WLAN{}
+	if base != nil {
+		live := *base
+		wlan = &live
 	}
+
+	wlan.ID = plan.ID.ValueString()
+	wlan.Name = plan.Name.ValueString()
+	wlan.NetworkID = plan.NetworkID.ValueString()
+	wlan.UserGroupID = plan.UserGroupID.ValueString()
+	wlan.Security = plan.Security.ValueString()
+	wlan.PMFMode = plan.PMFMode.ValueString()
+	// A null passphrase (the write-only workflow, or an imported WLAN) keeps the key the
+	// controller holds; the write-only value is laid over it by the caller.
+	if !plan.Passphrase.IsNull() && !plan.Passphrase.IsUnknown() {
+		wlan.Passphrase = plan.Passphrase.ValueString()
+	}
+	wlan.HideSSID = plan.HideSSID.ValueBool()
+	wlan.IsGuest = plan.IsGuest.ValueBool()
+	wlan.Enabled = plan.Enabled.ValueBool()
+	wlan.VLANEnabled = plan.VLANEnabled.ValueBool()
+	wlan.VLAN = plan.VLAN.ValueInt64Pointer()
+	wlan.MulticastEnhanceEnabled = plan.MulticastEnhance.ValueBool()
+	wlan.NasIDentifierType = plan.NasIDentifierType.ValueString()
+	wlan.No2GhzOui = plan.No2GhzOui.ValueBool()
+	wlan.L2Isolation = plan.L2Isolation.ValueBool()
+	wlan.ProxyArp = plan.ProxyArp.ValueBool()
+	wlan.BssTransition = plan.BssTransition.ValueBool()
+	wlan.UapsdEnabled = plan.Uapsd.ValueBool()
+	wlan.FastRoamingEnabled = plan.FastRoamingEnabled.ValueBool()
+	// rrm_enabled is sent only when the plan holds it; otherwise the live value stays, and on
+	// create the controller picks its default.
+	if !plan.RrmEnabled.IsNull() && !plan.RrmEnabled.IsUnknown() {
+		wlan.RrmEnabled = plan.RrmEnabled.ValueBool()
+	}
+	wlan.MinrateSettingPreference = plan.MinrateSettingPreference.ValueString()
+	wlan.MinrateNgEnabled = plan.MinimumDataRate2GKbps.ValueInt64() > 0
+	wlan.MinrateNgDataRateKbps = plan.MinimumDataRate2GKbps.ValueInt64Pointer()
+	wlan.MinrateNaEnabled = plan.MinimumDataRate5GKbps.ValueInt64() > 0
+	wlan.MinrateNaDataRateKbps = plan.MinimumDataRate5GKbps.ValueInt64Pointer()
+
+	// An unknown Int64 converts to a pointer to zero, which would turn group rekey off. Send the
+	// interval only when the plan holds one; otherwise the live value, or nothing on create, stays.
+	if !plan.GroupRekey.IsNull() && !plan.GroupRekey.IsUnknown() {
+		wlan.GroupRekey = plan.GroupRekey.ValueInt64Pointer()
+	}
+	wlan.DTIMMode = plan.DTIMMode.ValueString()
+	wlan.NameCombineEnabled = true
+
+	wlan.IappEnabled = plan.IappEnabled.ValueBool()
+	wlan.EnhancedIot = plan.EnhancedIot.ValueBool()
+	wlan.Hotspot2ConfEnabled = plan.Hotspot2ConfEnabled.ValueBool()
+	wlan.MloEnabled = plan.MloEnabled.ValueBool()
 
 	// Nested groups. A null/unknown group contributes nothing, exactly as its
 	// flat attributes did when unset; a null/unknown leaf inside a known group
@@ -2046,6 +2123,8 @@ func (r *wlanFrameworkResource) planToWLAN(
 
 	// Broadcast filter list
 	if !plan.BroadcastFilterList.IsNull() && !plan.BroadcastFilterList.IsUnknown() {
+		// A declared list replaces the live one.
+		wlan.BroadcastFilterList = nil
 		var bcList []types.String
 		diags.Append(plan.BroadcastFilterList.ElementsAs(ctx, &bcList, false)...)
 		if diags.HasError() {
@@ -2068,6 +2147,7 @@ func (r *wlanFrameworkResource) planToWLAN(
 		wlan.MACFilterPolicy = macFilter.Policy.ValueString()
 
 		if !macFilter.List.IsNull() && !macFilter.List.IsUnknown() {
+			wlan.MACFilterList = nil
 			var macList []types.String
 			diags.Append(macFilter.List.ElementsAs(ctx, &macList, false)...)
 			if diags.HasError() {
@@ -2083,6 +2163,7 @@ func (r *wlanFrameworkResource) planToWLAN(
 	// Handle private pre-shared keys (PPSK)
 	wlan.PrivatePresharedKeysEnabled = plan.PrivatePresharedKeysEnabled.ValueBool()
 	if !plan.PrivatePresharedKeys.IsNull() && !plan.PrivatePresharedKeys.IsUnknown() {
+		wlan.PrivatePresharedKeys = nil
 		var ppskList []wlanPrivatePresharedKeyModel
 		diags.Append(plan.PrivatePresharedKeys.ElementsAs(ctx, &ppskList, false)...)
 		if diags.HasError() {
@@ -2109,6 +2190,7 @@ func (r *wlanFrameworkResource) planToWLAN(
 	if ok {
 		wlan.ApGroupMode = apGroup.Mode.ValueString()
 		if !apGroup.IDs.IsNull() && !apGroup.IDs.IsUnknown() {
+			wlan.ApGroupIDs = nil
 			var apGroupList []types.String
 			diags.Append(apGroup.IDs.ElementsAs(ctx, &apGroupList, false)...)
 			if diags.HasError() {
@@ -2123,6 +2205,7 @@ func (r *wlanFrameworkResource) planToWLAN(
 
 	// Handle WLAN bands
 	if !plan.WLANBands.IsNull() && !plan.WLANBands.IsUnknown() {
+		wlan.WLANBands = nil
 		var contains2g, contains5g bool
 
 		var wlanBandsList []types.String
@@ -2152,6 +2235,7 @@ func (r *wlanFrameworkResource) planToWLAN(
 
 	// Handle schedule
 	if !plan.Schedule.IsNull() && !plan.Schedule.IsUnknown() {
+		wlan.ScheduleWithDuration = nil
 		var schedules []wlanScheduleModel
 		diags.Append(plan.Schedule.ElementsAs(ctx, &schedules, false)...)
 		if diags.HasError() {
@@ -2420,6 +2504,7 @@ func (r *wlanFrameworkResource) wlanToModel(
 	model.BssTransition = types.BoolValue(wlan.BssTransition)
 	model.Uapsd = types.BoolValue(wlan.UapsdEnabled)
 	model.FastRoamingEnabled = types.BoolValue(wlan.FastRoamingEnabled)
+	model.RrmEnabled = types.BoolValue(wlan.RrmEnabled)
 
 	if wlan.MinrateSettingPreference != "" {
 		model.MinrateSettingPreference = types.StringValue(wlan.MinrateSettingPreference)
