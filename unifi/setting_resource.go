@@ -345,11 +345,15 @@ type settingGlobalSwitchModel struct {
 	// unifi_wlan.l2_isolation it blocks same-network traffic across access
 	// points rather than within one, and unlike unifi_network.network_isolation
 	// it acts inside a network rather than between networks (#509).
-	AclDeviceIsolation   types.List   `tfsdk:"acl_device_isolation"`
-	StpVersion           types.String `tfsdk:"stp_version"`
-	DHCPSnoop            types.Bool   `tfsdk:"dhcp_snoop"`
-	JumboframeEnabled    types.Bool   `tfsdk:"jumboframe_enabled"`
-	Dot1XPortctrlEnabled types.Bool   `tfsdk:"dot1x_portctrl_enabled"`
+	AclDeviceIsolation          types.List   `tfsdk:"acl_device_isolation"`
+	StpVersion                  types.String `tfsdk:"stp_version"`
+	DHCPSnoop                   types.Bool   `tfsdk:"dhcp_snoop"`
+	JumboframeEnabled           types.Bool   `tfsdk:"jumboframe_enabled"`
+	Dot1XPortctrlEnabled        types.Bool   `tfsdk:"dot1x_portctrl_enabled"`
+	AutoStpEdgeDetectionEnabled types.Bool   `tfsdk:"auto_stp_edge_detection_enabled"`
+	FlowctrlEnabled             types.Bool   `tfsdk:"flowctrl_enabled"`
+	LinkDebounce                types.Int64  `tfsdk:"link_debounce"`
+	PoeStagingDelayMsec         types.Int64  `tfsdk:"poe_staging_delay_msec"`
 }
 
 // settingConnectivityModel is the nested connectivity block (Settings > WiFi >
@@ -583,11 +587,15 @@ var (
 		"upnp":                       types.ObjectType{AttrTypes: usgUPnPAttrTypes},
 	}
 	globalSwitchAttrTypes = map[string]attr.Type{
-		"acl_device_isolation":   types.ListType{ElemType: types.StringType},
-		"stp_version":            types.StringType,
-		"dhcp_snoop":             types.BoolType,
-		"jumboframe_enabled":     types.BoolType,
-		"dot1x_portctrl_enabled": types.BoolType,
+		"acl_device_isolation":            types.ListType{ElemType: types.StringType},
+		"stp_version":                     types.StringType,
+		"dhcp_snoop":                      types.BoolType,
+		"jumboframe_enabled":              types.BoolType,
+		"dot1x_portctrl_enabled":          types.BoolType,
+		"auto_stp_edge_detection_enabled": types.BoolType,
+		"flowctrl_enabled":                types.BoolType,
+		"link_debounce":                   types.Int64Type,
+		"poe_staging_delay_msec":          types.Int64Type,
 	}
 
 	connectivityAttrTypes = map[string]attr.Type{
@@ -1880,6 +1888,38 @@ func (r *settingResource) Schema(
 						Computed:            true,
 						PlanModifiers: []planmodifier.Bool{
 							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"auto_stp_edge_detection_enabled": schema.BoolAttribute{
+						MarkdownDescription: "Let the switches detect STP edge ports on their own.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"flowctrl_enabled": schema.BoolAttribute{
+						MarkdownDescription: "Enable flow control on all switches.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"link_debounce": schema.Int64Attribute{
+						MarkdownDescription: "Link debounce time in milliseconds. `0` turns it off.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
+					},
+					"poe_staging_delay_msec": schema.Int64Attribute{
+						MarkdownDescription: "Delay between powering on PoE ports after a switch boots, in milliseconds.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
 						},
 					},
 				},
@@ -4085,6 +4125,18 @@ func globalSwitchRawSetting(
 	if !model.Dot1XPortctrlEnabled.IsNull() && !model.Dot1XPortctrlEnabled.IsUnknown() {
 		data["dot1x_portctrl_enabled"] = model.Dot1XPortctrlEnabled.ValueBool()
 	}
+	if !model.AutoStpEdgeDetectionEnabled.IsNull() && !model.AutoStpEdgeDetectionEnabled.IsUnknown() {
+		data["auto_stp_edge_detection_enabled"] = model.AutoStpEdgeDetectionEnabled.ValueBool()
+	}
+	if !model.FlowctrlEnabled.IsNull() && !model.FlowctrlEnabled.IsUnknown() {
+		data["flowctrl_enabled"] = model.FlowctrlEnabled.ValueBool()
+	}
+	if !model.LinkDebounce.IsNull() && !model.LinkDebounce.IsUnknown() {
+		data["link_debounce"] = model.LinkDebounce.ValueInt64()
+	}
+	if !model.PoeStagingDelayMsec.IsNull() && !model.PoeStagingDelayMsec.IsUnknown() {
+		data["poe_staging_delay_msec"] = model.PoeStagingDelayMsec.ValueInt64()
+	}
 	return &settings.RawSetting{
 		BaseSetting: settings.BaseSetting{Key: globalSwitchSettingKey},
 		Data:        data,
@@ -4099,11 +4151,15 @@ func (r *settingResource) globalSwitchSettingToModel(
 	isolation, d := types.ListValueFrom(ctx, types.StringType, setting.AclDeviceIsolation)
 	diags.Append(d...)
 	return &settingGlobalSwitchModel{
-		AclDeviceIsolation:   isolation,
-		StpVersion:           types.StringValue(setting.StpVersion),
-		DHCPSnoop:            types.BoolValue(setting.DHCPSnoop),
-		JumboframeEnabled:    types.BoolValue(setting.JumboframeEnabled),
-		Dot1XPortctrlEnabled: types.BoolValue(setting.Dot1XPortctrlEnabled),
+		AclDeviceIsolation:          isolation,
+		StpVersion:                  types.StringValue(setting.StpVersion),
+		DHCPSnoop:                   types.BoolValue(setting.DHCPSnoop),
+		JumboframeEnabled:           types.BoolValue(setting.JumboframeEnabled),
+		Dot1XPortctrlEnabled:        types.BoolValue(setting.Dot1XPortctrlEnabled),
+		AutoStpEdgeDetectionEnabled: types.BoolValue(setting.AutoStpEdgeDetectionEnabled),
+		FlowctrlEnabled:             types.BoolValue(setting.FlowctrlEnabled),
+		LinkDebounce:                types.Int64PointerValue(setting.LinkDebounce),
+		PoeStagingDelayMsec:         types.Int64PointerValue(setting.PoeStagingDelayMsec),
 	}
 }
 
