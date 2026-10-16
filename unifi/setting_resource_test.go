@@ -1990,6 +1990,36 @@ func TestSettingGlobalSwitchUseStateForUnknown(t *testing.T) {
 					modified.PlanValue,
 				)
 			}
+		case schema.Int64Attribute:
+			if len(v.PlanModifiers) == 0 {
+				t.Errorf("global_switch.%s must use UseStateForUnknown", key)
+				continue
+			}
+			req := planmodifier.Int64Request{
+				ConfigValue: types.Int64Null(),
+				PlanValue:   types.Int64Unknown(),
+				State:       tfsdk.State{Raw: tftypes.NewValue(tftypes.Number, 200)},
+				StateValue:  types.Int64Value(200),
+			}
+			modified := &planmodifier.Int64Response{PlanValue: req.PlanValue}
+			for _, m := range v.PlanModifiers {
+				m.PlanModifyInt64(ctx, req, modified)
+				req.PlanValue = modified.PlanValue
+			}
+			if modified.Diagnostics.HasError() {
+				t.Errorf(
+					"global_switch.%s plan modifier returned errors: %v",
+					key,
+					modified.Diagnostics,
+				)
+			}
+			if !modified.PlanValue.Equal(types.Int64Value(200)) {
+				t.Errorf(
+					"global_switch.%s plan = %v, want the prior state value",
+					key,
+					modified.PlanValue,
+				)
+			}
 		default:
 			t.Errorf("global_switch.%s has unexpected type %T", key, a)
 		}

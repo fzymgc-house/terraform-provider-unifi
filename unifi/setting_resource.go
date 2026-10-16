@@ -4126,7 +4126,8 @@ func globalSwitchRawSetting(
 	if !model.Dot1XPortctrlEnabled.IsNull() && !model.Dot1XPortctrlEnabled.IsUnknown() {
 		data["dot1x_portctrl_enabled"] = model.Dot1XPortctrlEnabled.ValueBool()
 	}
-	if !model.AutoStpEdgeDetectionEnabled.IsNull() && !model.AutoStpEdgeDetectionEnabled.IsUnknown() {
+	if !model.AutoStpEdgeDetectionEnabled.IsNull() &&
+		!model.AutoStpEdgeDetectionEnabled.IsUnknown() {
 		data["auto_stp_edge_detection_enabled"] = model.AutoStpEdgeDetectionEnabled.ValueBool()
 	}
 	if !model.FlowctrlEnabled.IsNull() && !model.FlowctrlEnabled.IsUnknown() {

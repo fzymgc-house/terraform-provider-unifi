@@ -352,8 +352,8 @@ resource "unifi_port_profile" "groups" {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
-			// Removing the dot1x block resets it to its defaults (the group has an
-			// object default); the Computed groups keep the controller's values.
+			// Removing the dot1x block keeps the controller's values: the group is
+			// computed with no default, like the other groups.
 			{
 				Config: `
 resource "unifi_port_profile" "groups" {
@@ -362,7 +362,7 @@ resource "unifi_port_profile" "groups" {
 }
 `,
 				Check: resource.ComposeTestCheckFunc(
-					check("dot1x.ctrl", "force_authorized"),
+					check("dot1x.ctrl", "mac_based"),
 					// With no default, the leaf keeps the value the previous step set.
 					check("dot1x.idle_timeout", "10m0s"),
 					check("stormctrl.type", "rate"),
