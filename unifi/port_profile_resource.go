@@ -296,10 +296,16 @@ func (r *portProfileResource) Schema(
 				},
 				Attributes: map[string]schema.Attribute{
 					"ctrl": schema.StringAttribute{
-						Description: "The type of 802.1X control to use. Can be `auto`, `force_authorized`, `force_unauthorized`, `mac_based` or `multi_host`.",
-						Optional:    true,
-						Computed:    true,
-						Default:     stringdefault.StaticString("force_authorized"),
+						Description: "The type of 802.1X control to use. Can be `auto`, `force_authorized`, " +
+							"`force_unauthorized`, `mac_based` or `multi_host`. Unset, the controller keeps " +
+							"its own value (`force_authorized` on a new profile). A default here would " +
+							"plan a change whenever the `dot1x` block is absent, because the framework " +
+							"applies a nested default even then.",
+						Optional: true,
+						Computed: true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 						Validators: []validator.String{
 							stringvalidator.OneOf(
 								"auto",

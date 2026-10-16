@@ -80,7 +80,7 @@ resource "unifi_port_profile" "poe_disabled" {
 
 Optional:
 
-- `ctrl` (String) The type of 802.1X control to use. Can be `auto`, `force_authorized`, `force_unauthorized`, `mac_based` or `multi_host`.
+- `ctrl` (String) The type of 802.1X control to use. Can be `auto`, `force_authorized`, `force_unauthorized`, `mac_based` or `multi_host`. Unset, the controller keeps its own value (`force_authorized` on a new profile). A default here would plan a change whenever the `dot1x` block is absent, because the framework applies a nested default even then.
 - `idle_timeout` (String) The idle timeout to use when using MAC Based 802.1X control, as a Go duration string (e.g. `5m`, `300s`). Unset means the controller's own default: the value stays off the wire and is read back from the controller, so a profile the controller stores without the key imports with no change.
 
 

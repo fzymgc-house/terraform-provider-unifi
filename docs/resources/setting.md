@@ -217,9 +217,13 @@ Optional:
 Optional:
 
 - `acl_device_isolation` (List of String) Network IDs with Client Device Isolation enabled (Settings > Networks > "Device Isolation (ACL)"), which blocks all communication between devices in the same network. This is a switch ACL: it covers same-network traffic across access points, which `unifi_wlan.l2_isolation` (one access point) and `unifi_network.network_isolation` (between networks) do not. The controller only offers it for networks routed by a UniFi gateway or L3 switch, and some switch models do not support ACLs at all - it rejects an unsupported network rather than silently ignoring it.
+- `auto_stp_edge_detection_enabled` (Boolean) Let the switches detect STP edge ports on their own.
 - `dhcp_snoop` (Boolean) Enable Rogue DHCP Server Detection (DHCP snooping).
 - `dot1x_portctrl_enabled` (Boolean) Enable 802.1X port control.
+- `flowctrl_enabled` (Boolean) Enable flow control on all switches.
 - `jumboframe_enabled` (Boolean) Enable jumbo frames on all switches.
+- `link_debounce` (Number) Link debounce time in milliseconds. `0` turns it off.
+- `poe_staging_delay_msec` (Number) Delay between powering on PoE ports after a switch boots, in milliseconds.
 - `stp_version` (String) Spanning Tree Protocol mode for all switches: `stp`, `rstp`, or `disabled`.
 
 
