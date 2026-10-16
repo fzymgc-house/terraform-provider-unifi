@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -653,9 +654,14 @@ func (r *networkResource) Schema(
 						MarkdownDescription: "List of additional IPv6 addresses on the network, in CIDR notation " +
 							"(e.g. `fd00:601::1/64`). The gateway holds each one on the network beside the " +
 							"prefix from `interface_type`, such as a ULA gateway address beside a " +
-							"delegated prefix. Unset, the controller keeps its own list.",
+							"delegated prefix. Unset, the controller keeps its own list, and the list is " +
+							"read from the controller. A configured empty list clears it.",
 						Optional:    true,
+						Computed:    true,
 						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"setting_preference": schema.StringAttribute{
 						MarkdownDescription: "Whether the controller (`auto`) or this configuration " +
