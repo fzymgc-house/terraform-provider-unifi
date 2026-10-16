@@ -227,4 +227,4 @@ tool (
 	gotest.tools/gotestsum
 )
 
-replace github.com/ubiquiti-community/go-unifi => github.com/fzymgc-house/go-unifi v0.0.0-20261016104732-b290d484a7a3
+replace github.com/ubiquiti-community/go-unifi => github.com/fzymgc-house/go-unifi v0.0.0-20261016143452-84542704dd77

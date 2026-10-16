@@ -279,8 +279,8 @@ func Test_buildMinimalUpdateDevice_vwireEnabled(t *testing.T) {
 			MAC:  "aa:bb:cc:dd:ee:ff",
 			Name: "Test AP",
 			RadioTable: []unifi.DeviceRadioTable{
-				{Name: "wifi0", Radio: "ng", VwireEnabled: true},
-				{Name: "wifi1", Radio: "na", VwireEnabled: true},
+				{Name: "wifi0", Radio: "ng", VwireEnabled: boolPtr(true)},
+				{Name: "wifi1", Radio: "na", VwireEnabled: boolPtr(true)},
 			},
 		}
 		body := buildMinimalUpdateDevice(deviceReq, nil, nil)
@@ -291,7 +291,7 @@ func Test_buildMinimalUpdateDevice_vwireEnabled(t *testing.T) {
 			)
 		}
 		for _, radio := range body.RadioTable {
-			if !radio.VwireEnabled {
+			if !boolOrFalse(radio.VwireEnabled) {
 				t.Fatalf(
 					"radio %q VwireEnabled = false, want true (toggle dropped from PUT)",
 					radio.Name,
@@ -1863,6 +1863,55 @@ func Test_frameworkToRadioTable_unknownStaysOffTheWire(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("declared %s missing from PUT body: %s", want, body)
+		}
+	}
+}
+
+// Test_frameworkToRadioTable_declaredFalseGoesOnTheWire: a radio_table entry
+// that declares min_rssi_enabled = false must send "min_rssi_enabled":false.
+// With the radio bools as plain bool with omitempty, every false was dropped,
+// so an update could turn min_rssi_enabled on but never off. Undeclared bools
+// are Unknown in the plan and must stay off the wire.
+func Test_frameworkToRadioTable_declaredFalseGoesOnTheWire(t *testing.T) {
+	ctx := context.Background()
+	r := &deviceResource{}
+
+	declared := unknownRadioTableModel()
+	declared.Name = types.StringValue("wifi2")
+	declared.Radio = types.StringValue("6e")
+	declared.MinRssiEnabled = types.BoolValue(false)
+	declared.MinRssi = types.Int64Value(-75)
+
+	radios, diags := r.frameworkToRadioTable(ctx, radioTableListFromModels(t, declared))
+	if diags.HasError() {
+		t.Fatalf("frameworkToRadioTable: %v", diags)
+	}
+	if len(radios) != 1 {
+		t.Fatalf("got %d radios, want 1", len(radios))
+	}
+
+	raw, err := json.Marshal(radios[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	body := string(raw)
+
+	if !strings.Contains(body, `"min_rssi_enabled":false`) {
+		t.Errorf("declared min_rssi_enabled = false missing from PUT body: %s", body)
+	}
+	if strings.Contains(body, `"min_rssi":`) {
+		t.Errorf("min_rssi sent with min_rssi_enabled = false: %s", body)
+	}
+	for _, key := range []string{
+		`"assisted_roaming_enabled":`,
+		`"dfs":`,
+		`"hard_noise_floor_enabled":`,
+		`"loadbalance_enabled":`,
+		`"sens_level_enabled":`,
+		`"vwire_enabled":`,
+	} {
+		if strings.Contains(body, key) {
+			t.Errorf("undeclared %s sent in PUT body: %s", key, body)
 		}
 	}
 }
