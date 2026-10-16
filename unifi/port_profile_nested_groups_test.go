@@ -284,7 +284,7 @@ resource "unifi_port_profile" "groups" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet("unifi_port_profile.groups", "id"),
 					check("dot1x.ctrl", "auto"),
-					// The controller stores no idle timeout until one is set, and the leaf has no default.
+					// No idle timeout is stored until one is set, and the leaf has no default.
 					resource.TestCheckNoResourceAttr("unifi_port_profile.groups", "dot1x.idle_timeout"),
 					check("egress_rate_limit.enabled", "true"),
 					check("egress_rate_limit.kbps", "1000"),
@@ -360,8 +360,8 @@ resource "unifi_port_profile" "groups" {
 `,
 				Check: resource.ComposeTestCheckFunc(
 					check("dot1x.ctrl", "force_authorized"),
-					// The controller stores no idle timeout until one is set, and the leaf has no default.
-					resource.TestCheckNoResourceAttr("unifi_port_profile.groups", "dot1x.idle_timeout"),
+					// With no default, the leaf keeps the value the previous step set.
+					check("dot1x.idle_timeout", "10m0s"),
 					check("stormctrl.type", "rate"),
 					check("stormctrl.bcast.enabled", "true"),
 				),
