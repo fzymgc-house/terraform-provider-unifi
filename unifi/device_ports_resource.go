@@ -22,12 +22,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/ubiquiti-community/go-unifi/unifi"
+	"github.com/ubiquiti-community/terraform-provider-unifi/unifi/util"
 )
 
 var (
@@ -36,6 +38,7 @@ var (
 	_ resource.ResourceWithImportState    = &devicePortsResource{}
 	_ resource.ResourceWithModifyPlan     = &devicePortsResource{}
 	_ resource.ResourceWithValidateConfig = &devicePortsResource{}
+	_ resource.ResourceWithUpgradeState   = &devicePortsResource{}
 )
 
 func NewDevicePortsResource() resource.Resource {
@@ -62,13 +65,29 @@ func (r *devicePortsResource) Metadata(
 }
 
 func devicePortAttributes() map[string]schema.Attribute {
-	attrs := make(map[string]schema.Attribute, len(portFields))
-	for _, f := range portFields {
+	return portFieldAttributes(portFields)
+}
+
+// portFieldAttributes builds the schema of fields. Every attribute is computed
+// from the controller when the configuration leaves it out, an object field
+// included, so a partly declared group resolves its other leaves from the
+// controller.
+func portFieldAttributes(fields []portField) map[string]schema.Attribute {
+	attrs := make(map[string]schema.Attribute, len(fields))
+	for _, f := range fields {
 		optional := !f.computedOnly
 		if len(f.oneOf) > 0 {
 			f.description += " One of `" + strings.Join(f.oneOf, "`, `") + "`."
 		}
 		switch f.kind {
+		case portFieldObject:
+			attrs[f.name] = schema.SingleNestedAttribute{
+				MarkdownDescription: f.description,
+				Optional:            optional,
+				Computed:            true,
+				PlanModifiers:       []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
+				Attributes:          portFieldAttributes(f.children),
+			}
 		case portFieldBool:
 			attrs[f.name] = schema.BoolAttribute{
 				MarkdownDescription: f.description,
@@ -133,6 +152,10 @@ func (r *devicePortsResource) Schema(
 			"other so their writes to the device do not interleave.\n\n" +
 			"Destroying the resource resets every port on the device to the default configuration. Use a " +
 			"`removed` block with `destroy = false` to stop managing a device without touching its ports.",
+		// v1 nests the port_security, dot1x, egress_rate_limit, lldpmed and
+		// stormctrl keys into objects, the shape unifi_device.port_override
+		// uses. See UpgradeState.
+		Version: 1,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "The controller ID of the device.",
@@ -181,6 +204,77 @@ func (r *devicePortsResource) Schema(
 			},
 		},
 	}
+}
+
+// UpgradeState moves v0 state to the nested port groups of v1. Keys that are
+// absent are skipped, so it is safe on any v0 state.
+func (r *devicePortsResource) UpgradeState(
+	ctx context.Context,
+) map[int64]resource.StateUpgrader {
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	schemaType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	return map[int64]resource.StateUpgrader{
+		0: {
+			StateUpgrader: func(
+				ctx context.Context,
+				req resource.UpgradeStateRequest,
+				resp *resource.UpgradeStateResponse,
+			) {
+				if req.RawState == nil {
+					return
+				}
+				dv, err := util.UpgradeRawState(schemaType, req.RawState.JSON, nestDevicePortsState)
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to upgrade device ports state", err.Error())
+					return
+				}
+				resp.DynamicValue = dv
+			},
+		},
+	}
+}
+
+// nestDevicePortsState rewrites the flat v0 port keys into the v1 objects.
+func nestDevicePortsState(state map[string]any) {
+	util.WithObject(state, "ports", func(ports map[string]any) {
+		for _, v := range ports {
+			port, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			util.NestFields(port, "port_security", map[string]string{
+				"port_security_enabled":     "enabled",
+				"port_security_mac_address": "mac_address",
+			})
+			util.NestFields(port, "dot1x", map[string]string{
+				"dot1x_ctrl":         "ctrl",
+				"dot1x_idle_timeout": "idle_timeout",
+			})
+			util.NestFields(port, "egress_rate_limit", map[string]string{
+				"egress_rate_limit_kbps_enabled": "enabled",
+				"egress_rate_limit_kbps":         "kbps",
+			})
+			util.NestFields(port, "lldpmed", map[string]string{
+				"lldpmed_enabled": "enabled",
+			})
+			for _, class := range []string{"bcast", "mcast", "ucast"} {
+				util.NestFields(port, "stormctrl", map[string]string{
+					"stormctrl_" + class + "_enabled": class + "_enabled",
+					"stormctrl_" + class + "_rate":    class + "_rate",
+				})
+			}
+			util.WithObject(port, "stormctrl", func(sc map[string]any) {
+				for _, class := range []string{"bcast", "mcast", "ucast"} {
+					util.NestFields(sc, class, map[string]string{
+						class + "_enabled": "enabled",
+						class + "_rate":    "rate",
+					})
+				}
+			})
+		}
+	})
 }
 
 func (r *devicePortsResource) Configure(
@@ -347,7 +441,7 @@ func (r *devicePortsResource) ModifyPlan(
 			if !f.computedOnly && declared(f.name) {
 				values[f.name] = planAttrs[f.name]
 			} else {
-				values[f.name] = unknownPortValue(f.kind)
+				values[f.name] = unknownPortValue(f)
 			}
 		}
 		obj, d := types.ObjectValue(attrTypes, values)

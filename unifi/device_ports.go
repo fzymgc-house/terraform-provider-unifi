@@ -22,11 +22,16 @@ const (
 	portFieldInt
 	portFieldStringSet
 	portFieldIntSet
+	// portFieldObject groups related keys of the entry into one nested
+	// attribute, the shape unifi_device.port_override uses. Each child maps
+	// onto its own key of the entry.
+	portFieldObject
 )
 
 // portField maps one unifi_device_ports port attribute onto its key in the
 // controller's port_overrides entry. The table below is the single source for
 // the schema, the state read from the controller, and the keys written back.
+// An object field has no apiKey of its own; its children carry the keys.
 type portField struct {
 	name         string
 	apiKey       string
@@ -34,6 +39,7 @@ type portField struct {
 	description  string
 	oneOf        []string
 	computedOnly bool
+	children     []portField
 }
 
 var portFields = []portField{
@@ -168,89 +174,97 @@ var portFields = []portField{
 		description: "Isolate the port from other isolated ports.",
 	},
 	{
-		name:        "port_security_enabled",
-		apiKey:      "port_security_enabled",
-		kind:        portFieldBool,
-		description: "Restrict the port to `port_security_mac_address`.",
-	},
-	{
-		name:        "port_security_mac_address",
-		apiKey:      "port_security_mac_address",
-		kind:        portFieldStringSet,
-		description: "MAC addresses allowed when `port_security_enabled` is true.",
-	},
-	{
-		name:   "dot1x_ctrl",
-		apiKey: "dot1x_ctrl",
-		kind:   portFieldString,
-		oneOf: []string{
-			"auto",
-			"force_authorized",
-			"force_unauthorized",
-			"mac_based",
-			"multi_host",
+		name:        "port_security",
+		kind:        portFieldObject,
+		description: "Port security: a MAC allow-list for the port.",
+		children: []portField{
+			{
+				name:        "enabled",
+				apiKey:      "port_security_enabled",
+				kind:        portFieldBool,
+				description: "Restrict the port to `mac_address`.",
+			},
+			{
+				name:        "mac_address",
+				apiKey:      "port_security_mac_address",
+				kind:        portFieldStringSet,
+				description: "MAC addresses allowed when `enabled` is true.",
+			},
 		},
-		description: "802.1X control mode.",
 	},
 	{
-		name:        "dot1x_idle_timeout",
-		apiKey:      "dot1x_idle_timeout",
-		kind:        portFieldInt,
-		description: "802.1X idle timeout in seconds.",
+		name:        "dot1x",
+		kind:        portFieldObject,
+		description: "802.1X port authentication.",
+		children: []portField{
+			{
+				name:   "ctrl",
+				apiKey: "dot1x_ctrl",
+				kind:   portFieldString,
+				oneOf: []string{
+					"auto",
+					"force_authorized",
+					"force_unauthorized",
+					"mac_based",
+					"multi_host",
+				},
+				description: "802.1X control mode.",
+			},
+			{
+				name:        "idle_timeout",
+				apiKey:      "dot1x_idle_timeout",
+				kind:        portFieldInt,
+				description: "802.1X idle timeout in seconds.",
+			},
+		},
 	},
 	{
-		name:        "egress_rate_limit_kbps_enabled",
-		apiKey:      "egress_rate_limit_kbps_enabled",
-		kind:        portFieldBool,
-		description: "Enable egress rate limiting.",
+		name:        "egress_rate_limit",
+		kind:        portFieldObject,
+		description: "Egress rate limiting.",
+		children: []portField{
+			{
+				name:        "enabled",
+				apiKey:      "egress_rate_limit_kbps_enabled",
+				kind:        portFieldBool,
+				description: "Enable egress rate limiting.",
+			},
+			{
+				name:        "kbps",
+				apiKey:      "egress_rate_limit_kbps",
+				kind:        portFieldInt,
+				description: "Egress rate limit in kbps.",
+			},
+		},
 	},
 	{
-		name:        "egress_rate_limit_kbps",
-		apiKey:      "egress_rate_limit_kbps",
-		kind:        portFieldInt,
-		description: "Egress rate limit in kbps.",
+		name:        "lldpmed",
+		kind:        portFieldObject,
+		description: "LLDP-MED.",
+		children: []portField{
+			{
+				name:        "enabled",
+				apiKey:      "lldpmed_enabled",
+				kind:        portFieldBool,
+				description: "Enable LLDP-MED.",
+			},
+			{
+				name:        "notify_enabled",
+				apiKey:      "lldpmed_notify_enabled",
+				kind:        portFieldBool,
+				description: "Enable LLDP-MED topology change notifications.",
+			},
+		},
 	},
 	{
-		name:        "lldpmed_enabled",
-		apiKey:      "lldpmed_enabled",
-		kind:        portFieldBool,
-		description: "Enable LLDP-MED.",
-	},
-	{
-		name:        "stormctrl_bcast_enabled",
-		apiKey:      "stormctrl_bcast_enabled",
-		kind:        portFieldBool,
-		description: "Enable broadcast storm control.",
-	},
-	{
-		name:        "stormctrl_bcast_rate",
-		apiKey:      "stormctrl_bcast_rate",
-		kind:        portFieldInt,
-		description: "Broadcast storm control rate in packets per second.",
-	},
-	{
-		name:        "stormctrl_mcast_enabled",
-		apiKey:      "stormctrl_mcast_enabled",
-		kind:        portFieldBool,
-		description: "Enable multicast storm control.",
-	},
-	{
-		name:        "stormctrl_mcast_rate",
-		apiKey:      "stormctrl_mcast_rate",
-		kind:        portFieldInt,
-		description: "Multicast storm control rate in packets per second.",
-	},
-	{
-		name:        "stormctrl_ucast_enabled",
-		apiKey:      "stormctrl_ucast_enabled",
-		kind:        portFieldBool,
-		description: "Enable unknown-unicast storm control.",
-	},
-	{
-		name:        "stormctrl_ucast_rate",
-		apiKey:      "stormctrl_ucast_rate",
-		kind:        portFieldInt,
-		description: "Unknown-unicast storm control rate in packets per second.",
+		name:        "stormctrl",
+		kind:        portFieldObject,
+		description: "Storm control, per traffic class.",
+		children: []portField{
+			stormctrlClass("bcast", "broadcast"),
+			stormctrlClass("mcast", "multicast"),
+			stormctrlClass("ucast", "unknown-unicast"),
+		},
 	},
 	{
 		name:        "setting_preference",
@@ -265,6 +279,30 @@ var portFields = []portField{
 		kind:        portFieldBool,
 		description: "Use the port as an SD-WAN underlay.",
 	},
+}
+
+// stormctrlClass is one traffic class of the stormctrl object: its enable flag
+// and its rate, keyed stormctrl_<class>_enabled and stormctrl_<class>_rate.
+func stormctrlClass(class, label string) portField {
+	return portField{
+		name:        class,
+		kind:        portFieldObject,
+		description: "Storm control for " + label + " traffic.",
+		children: []portField{
+			{
+				name:        "enabled",
+				apiKey:      "stormctrl_" + class + "_enabled",
+				kind:        portFieldBool,
+				description: "Enable " + label + " storm control.",
+			},
+			{
+				name:        "rate",
+				apiKey:      "stormctrl_" + class + "_rate",
+				kind:        portFieldInt,
+				description: label + " storm control rate in packets per second.",
+			},
+		},
+	}
 }
 
 // portOverrideEntry is one element of a device's port_overrides array, kept as
@@ -363,8 +401,8 @@ func mergePortOverrides(
 	return merged, nil
 }
 
-func portFieldAttrType(kind portFieldKind) attr.Type {
-	switch kind {
+func portFieldAttrType(f portField) attr.Type {
+	switch f.kind {
 	case portFieldBool:
 		return types.BoolType
 	case portFieldInt:
@@ -373,21 +411,27 @@ func portFieldAttrType(kind portFieldKind) attr.Type {
 		return types.SetType{ElemType: types.StringType}
 	case portFieldIntSet:
 		return types.SetType{ElemType: types.Int64Type}
+	case portFieldObject:
+		return types.ObjectType{AttrTypes: portFieldsAttrTypes(f.children)}
 	default:
 		return types.StringType
 	}
 }
 
-func devicePortAttrTypes() map[string]attr.Type {
-	attrTypes := make(map[string]attr.Type, len(portFields))
-	for _, f := range portFields {
-		attrTypes[f.name] = portFieldAttrType(f.kind)
+func portFieldsAttrTypes(fields []portField) map[string]attr.Type {
+	attrTypes := make(map[string]attr.Type, len(fields))
+	for _, f := range fields {
+		attrTypes[f.name] = portFieldAttrType(f)
 	}
 	return attrTypes
 }
 
-func nullPortValue(kind portFieldKind) attr.Value {
-	switch kind {
+func devicePortAttrTypes() map[string]attr.Type {
+	return portFieldsAttrTypes(portFields)
+}
+
+func nullPortValue(f portField) attr.Value {
+	switch f.kind {
 	case portFieldBool:
 		return types.BoolNull()
 	case portFieldInt:
@@ -396,13 +440,15 @@ func nullPortValue(kind portFieldKind) attr.Value {
 		return types.SetNull(types.StringType)
 	case portFieldIntSet:
 		return types.SetNull(types.Int64Type)
+	case portFieldObject:
+		return types.ObjectNull(portFieldsAttrTypes(f.children))
 	default:
 		return types.StringNull()
 	}
 }
 
-func unknownPortValue(kind portFieldKind) attr.Value {
-	switch kind {
+func unknownPortValue(f portField) attr.Value {
+	switch f.kind {
 	case portFieldBool:
 		return types.BoolUnknown()
 	case portFieldInt:
@@ -411,9 +457,78 @@ func unknownPortValue(kind portFieldKind) attr.Value {
 		return types.SetUnknown(types.StringType)
 	case portFieldIntSet:
 		return types.SetUnknown(types.Int64Type)
+	case portFieldObject:
+		return types.ObjectUnknown(portFieldsAttrTypes(f.children))
 	default:
 		return types.StringUnknown()
 	}
+}
+
+// decodePortGroup builds the object of f from the entry: every child is read
+// from its own key, and an absent key reads as null. The object is always
+// known, so a configuration that declares part of the group plans the rest as
+// computed leaves.
+func decodePortGroup(f portField, entry portOverrideEntry) (attr.Value, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	values := make(map[string]attr.Value, len(f.children))
+	for _, c := range f.children {
+		if c.kind == portFieldObject {
+			v, d := decodePortGroup(c, entry)
+			diags.Append(d...)
+			values[c.name] = v
+			continue
+		}
+		raw, ok := entry[c.apiKey]
+		if !ok {
+			values[c.name] = nullPortValue(c)
+			continue
+		}
+		v, d := decodePortValue(c, raw)
+		diags.Append(d...)
+		values[c.name] = v
+	}
+	obj, d := types.ObjectValue(portFieldsAttrTypes(f.children), values)
+	diags.Append(d...)
+	return obj, diags
+}
+
+// encodeDeclaredFields writes every field of fields that the configuration
+// declares (not null in config) and the plan knows into entry, descending into
+// object fields. Fields left out of the configuration are not written, so the
+// controller keeps their current values.
+func encodeDeclaredFields(
+	ctx context.Context,
+	fields []portField,
+	planAttrs, configAttrs map[string]attr.Value,
+	entry portOverrideEntry,
+) diag.Diagnostics {
+	var diags diag.Diagnostics
+	for _, f := range fields {
+		if f.computedOnly {
+			continue
+		}
+		cv, ok := configAttrs[f.name]
+		if !ok || cv.IsNull() {
+			continue
+		}
+		pv := planAttrs[f.name]
+		if pv == nil || pv.IsNull() || pv.IsUnknown() {
+			continue
+		}
+		if f.kind == portFieldObject {
+			planObj, ok := pv.(types.Object)
+			configObj, cok := cv.(types.Object)
+			if !ok || !cok || configObj.IsUnknown() {
+				continue
+			}
+			diags.Append(encodeDeclaredFields(ctx, f.children, planObj.Attributes(), configObj.Attributes(), entry)...)
+			continue
+		}
+		raw, d := encodePortValue(ctx, f, pv)
+		diags.Append(d...)
+		entry[f.apiKey] = raw
+	}
+	return diags
 }
 
 // decodePortValue turns one raw port_overrides value into its Terraform value.
@@ -421,7 +536,7 @@ func unknownPortValue(kind portFieldKind) attr.Value {
 func decodePortValue(f portField, raw json.RawMessage) (attr.Value, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if string(raw) == "null" {
-		return nullPortValue(f.kind), diags
+		return nullPortValue(f), diags
 	}
 	bad := func(err error) (attr.Value, diag.Diagnostics) {
 		diags.AddError(
@@ -434,7 +549,7 @@ func decodePortValue(f portField, raw json.RawMessage) (attr.Value, diag.Diagnos
 				err,
 			),
 		)
-		return nullPortValue(f.kind), diags
+		return nullPortValue(f), diags
 	}
 	switch f.kind {
 	case portFieldBool:
@@ -580,9 +695,15 @@ func portOverridesToState(entries []portOverrideEntry) (types.Map, diag.Diagnost
 		}
 		values := make(map[string]attr.Value, len(portFields))
 		for _, f := range portFields {
+			if f.kind == portFieldObject {
+				v, d := decodePortGroup(f, entry)
+				diags.Append(d...)
+				values[f.name] = v
+				continue
+			}
 			raw, ok := entry[f.apiKey]
 			if !ok {
-				values[f.name] = nullPortValue(f.kind)
+				values[f.name] = nullPortValue(f)
 				continue
 			}
 			v, d := decodePortValue(f, raw)
@@ -635,21 +756,7 @@ func declaredPorts(
 			configAttrs = c.Attributes()
 		}
 		entry := portOverrideEntry{}
-		for _, f := range portFields {
-			if f.computedOnly {
-				continue
-			}
-			if cv, ok := configAttrs[f.name]; !ok || cv.IsNull() {
-				continue
-			}
-			pv := planAttrs[f.name]
-			if pv == nil || pv.IsNull() || pv.IsUnknown() {
-				continue
-			}
-			raw, d := encodePortValue(ctx, f, pv)
-			diags.Append(d...)
-			entry[f.apiKey] = raw
-		}
+		diags.Append(encodeDeclaredFields(ctx, portFields, planAttrs, configAttrs, entry)...)
 		declared[idx] = entry
 	}
 	return declared, diags

@@ -184,7 +184,7 @@ func TestPortOverridesToState_ReadsEveryEntry(t *testing.T) {
 	}
 	trunk := portAttrs(t, ports, "12")
 	if !trunk["stp_edge_state"].Equal(types.StringValue("disabled")) ||
-		!trunk["dot1x_idle_timeout"].Equal(types.Int64Value(300)) {
+		!trunk["dot1x"].(types.Object).Attributes()["idle_timeout"].Equal(types.Int64Value(300)) {
 		t.Errorf("port 12 = %v", trunk)
 	}
 	if !trunk["op_mode"].IsNull() || !trunk["port_profile_id"].IsNull() {
@@ -209,7 +209,7 @@ func portObject(t *testing.T, set map[string]attr.Value) types.Object {
 	t.Helper()
 	values := map[string]attr.Value{}
 	for _, f := range portFields {
-		values[f.name] = nullPortValue(f.kind)
+		values[f.name] = nullPortValue(f)
 	}
 	for k, v := range set {
 		values[k] = v
@@ -310,8 +310,8 @@ func TestPortOverridesToState_ToleratesQuotedNumbers(t *testing.T) {
 	if !p["speed"].Equal(types.Int64Value(1000)) {
 		t.Errorf("speed = %v, want 1000", p["speed"])
 	}
-	if !p["dot1x_idle_timeout"].IsNull() {
-		t.Errorf("dot1x_idle_timeout = %v, want null for an empty string", p["dot1x_idle_timeout"])
+	if !p["dot1x"].(types.Object).Attributes()["idle_timeout"].IsNull() {
+		t.Errorf("dot1x.idle_timeout = %v, want null for an empty string", p["dot1x"])
 	}
 	want, _ := types.SetValue(
 		types.Int64Type,
