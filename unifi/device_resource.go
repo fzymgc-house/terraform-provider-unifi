@@ -2273,10 +2273,10 @@ func (r *deviceResource) setResourceData(
 	}
 
 	// VLAN
-	model.SwitchVLANEnabled = types.BoolValue(device.SwitchVLANEnabled)
+	model.SwitchVLANEnabled = types.BoolValue(boolOrFalse(device.SwitchVLANEnabled))
 
 	// Mesh
-	model.MeshStaVapEnabled = types.BoolValue(device.MeshStaVapEnabled)
+	model.MeshStaVapEnabled = types.BoolValue(boolOrFalse(device.MeshStaVapEnabled))
 
 	// Advanced features
 	if device.OutdoorModeOverride == "" {
@@ -2401,10 +2401,10 @@ func (r *deviceResource) modelToAPIDevice(
 	}
 
 	// VLAN
-	device.SwitchVLANEnabled = model.SwitchVLANEnabled.ValueBool()
+	device.SwitchVLANEnabled = boolPointerIfKnown(model.SwitchVLANEnabled)
 
 	// Mesh
-	device.MeshStaVapEnabled = model.MeshStaVapEnabled.ValueBool()
+	device.MeshStaVapEnabled = boolPointerIfKnown(model.MeshStaVapEnabled)
 
 	// Advanced features
 	if !model.OutdoorModeOverride.IsNull() {
@@ -3395,7 +3395,7 @@ func (r *deviceResource) radioTableToFramework(
 			Ht:             types.Int64PointerValue(radio.Ht),
 			TxPower:        stringOrNull(radio.TxPower),
 			TxPowerMode:    stringOrNull(radio.TxPowerMode),
-			MinRssiEnabled: types.BoolValue(radio.MinRssiEnabled),
+			MinRssiEnabled: types.BoolValue(boolOrFalse(radio.MinRssiEnabled)),
 			MinRssi:        types.Int64PointerValue(radio.MinRssi),
 			AntennaGain:    types.Int64PointerValue(radio.AntennaGain),
 			AntennaID:      types.Int64PointerValue(radio.AntennaID),
@@ -3405,14 +3405,14 @@ func (r *deviceResource) radioTableToFramework(
 			// report. Read restores the configured value from prior state.
 			AssistedRoamingEnabled: types.BoolNull(),
 			AssistedRoamingRssi:    types.Int64Null(),
-			Dfs:                    types.BoolValue(radio.Dfs),
-			HardNoiseFloorEnabled:  types.BoolValue(radio.HardNoiseFloorEnabled),
-			LoadbalanceEnabled:     types.BoolValue(radio.LoadbalanceEnabled),
+			Dfs:                    types.BoolValue(boolOrFalse(radio.Dfs)),
+			HardNoiseFloorEnabled:  types.BoolValue(boolOrFalse(radio.HardNoiseFloorEnabled)),
+			LoadbalanceEnabled:     types.BoolValue(boolOrFalse(radio.LoadbalanceEnabled)),
 			Maxsta:                 types.Int64PointerValue(radio.Maxsta),
 			Name:                   stringOrNull(radio.Name),
 			SensLevel:              types.Int64PointerValue(radio.SensLevel),
-			SensLevelEnabled:       types.BoolValue(radio.SensLevelEnabled),
-			VwireEnabled:           types.BoolValue(radio.VwireEnabled),
+			SensLevelEnabled:       types.BoolValue(boolOrFalse(radio.SensLevelEnabled)),
+			VwireEnabled:           types.BoolValue(boolOrFalse(radio.VwireEnabled)),
 		}
 
 		objVal, objDiags := types.ObjectValueFrom(ctx, radioTableAttrTypes(), model)
@@ -3852,10 +3852,10 @@ func sanitizeRadioForUpdate(radioName string, radio *unifi.DeviceRadioTable) dia
 		)
 	}
 
-	if radio.MinRssiEnabled && radio.MinRssi != nil && !inRange(radio.MinRssi, -90, -67) {
+	if boolOrFalse(radio.MinRssiEnabled) && radio.MinRssi != nil && !inRange(radio.MinRssi, -90, -67) {
 		warnDropped("min_rssi", *radio.MinRssi, -90, -67)
 	}
-	if !radio.MinRssiEnabled || !inRange(radio.MinRssi, -90, -67) {
+	if !boolOrFalse(radio.MinRssiEnabled) || !inRange(radio.MinRssi, -90, -67) {
 		radio.MinRssi = nil
 	}
 	// maxsta has no "enabled" flag — it's Optional+Computed with UseStateForUnknown,
@@ -3871,10 +3871,10 @@ func sanitizeRadioForUpdate(radioName string, radio *unifi.DeviceRadioTable) dia
 	if !inRange(radio.Maxsta, 1, 200) {
 		radio.Maxsta = nil
 	}
-	if radio.SensLevelEnabled && radio.SensLevel != nil && !inRange(radio.SensLevel, -90, -50) {
+	if boolOrFalse(radio.SensLevelEnabled) && radio.SensLevel != nil && !inRange(radio.SensLevel, -90, -50) {
 		warnDropped("sens_level", *radio.SensLevel, -90, -50)
 	}
-	if !radio.SensLevelEnabled || !inRange(radio.SensLevel, -90, -50) {
+	if !boolOrFalse(radio.SensLevelEnabled) || !inRange(radio.SensLevel, -90, -50) {
 		radio.SensLevel = nil
 	}
 
@@ -3912,18 +3912,18 @@ func (r *deviceResource) frameworkToRadioTable(
 			Ht:                    int64PointerIfKnown(model.Ht),
 			TxPower:               model.TxPower.ValueString(),
 			TxPowerMode:           model.TxPowerMode.ValueString(),
-			MinRssiEnabled:        model.MinRssiEnabled.ValueBool(),
+			MinRssiEnabled:        boolPointerIfKnown(model.MinRssiEnabled),
 			MinRssi:               int64PointerIfKnown(model.MinRssi),
 			AntennaGain:           int64PointerIfKnown(model.AntennaGain),
 			AntennaID:             int64PointerIfKnown(model.AntennaID),
-			Dfs:                   model.Dfs.ValueBool(),
-			HardNoiseFloorEnabled: model.HardNoiseFloorEnabled.ValueBool(),
-			LoadbalanceEnabled:    model.LoadbalanceEnabled.ValueBool(),
+			Dfs:                   boolPointerIfKnown(model.Dfs),
+			HardNoiseFloorEnabled: boolPointerIfKnown(model.HardNoiseFloorEnabled),
+			LoadbalanceEnabled:    boolPointerIfKnown(model.LoadbalanceEnabled),
 			Maxsta:                int64PointerIfKnown(model.Maxsta),
 			Name:                  model.Name.ValueString(),
 			SensLevel:             int64PointerIfKnown(model.SensLevel),
-			SensLevelEnabled:      model.SensLevelEnabled.ValueBool(),
-			VwireEnabled:          model.VwireEnabled.ValueBool(),
+			SensLevelEnabled:      boolPointerIfKnown(model.SensLevelEnabled),
+			VwireEnabled:          boolPointerIfKnown(model.VwireEnabled),
 		}
 
 		diags.Append(sanitizeRadioForUpdate(radio.Radio, &radio)...)
@@ -4139,4 +4139,10 @@ func (r *deviceResource) List(
 			}
 		}
 	}
+}
+
+// boolOrFalse reads a bool that go-unifi models as a pointer. A key the
+// controller left out reads as false.
+func boolOrFalse(b *bool) bool {
+	return b != nil && *b
 }

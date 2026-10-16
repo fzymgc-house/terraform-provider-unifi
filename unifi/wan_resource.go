@@ -1884,7 +1884,7 @@ func (r *wanResource) modelToNetwork(
 		network.SingleNetworkLan = model.SingleNetworkLAN.ValueStringPointer()
 	}
 	if !model.MACOverrideEnabled.IsNull() && !model.MACOverrideEnabled.IsUnknown() {
-		network.MACOverrideEnabled = model.MACOverrideEnabled.ValueBool()
+		network.MACOverrideEnabled = model.MACOverrideEnabled.ValueBoolPointer()
 	}
 	dslite, ok, d := util.ObjectAs[wanDsliteModel](ctx, model.Dslite)
 	diags.Append(d...)
@@ -1893,7 +1893,7 @@ func (r *wanResource) modelToNetwork(
 			network.WANDsliteRemoteHost = dslite.RemoteHost.ValueStringPointer()
 		}
 		if !dslite.RemoteHostAuto.IsNull() && !dslite.RemoteHostAuto.IsUnknown() {
-			network.WANDsliteRemoteHostAuto = dslite.RemoteHostAuto.ValueBool()
+			network.WANDsliteRemoteHostAuto = dslite.RemoteHostAuto.ValueBoolPointer()
 		}
 	}
 
@@ -2221,10 +2221,10 @@ func (r *wanResource) networkToModel(
 	model.SettingPreference = types.StringPointerValue(network.SettingPreference)
 	model.IPv6SettingPreference = types.StringPointerValue(network.IPV6SettingPreference)
 	model.SingleNetworkLAN = types.StringPointerValue(network.SingleNetworkLan)
-	model.MACOverrideEnabled = types.BoolValue(network.MACOverrideEnabled)
+	model.MACOverrideEnabled = types.BoolValue(boolOrFalse(network.MACOverrideEnabled))
 	dsliteObj, d := types.ObjectValueFrom(ctx, wanDsliteModel{}.AttributeTypes(), wanDsliteModel{
 		RemoteHost:     types.StringPointerValue(network.WANDsliteRemoteHost),
-		RemoteHostAuto: types.BoolValue(network.WANDsliteRemoteHostAuto),
+		RemoteHostAuto: types.BoolValue(boolOrFalse(network.WANDsliteRemoteHostAuto)),
 	})
 	diags.Append(d...)
 	model.Dslite = dsliteObj

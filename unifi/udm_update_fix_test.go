@@ -18,32 +18,32 @@ func TestSanitizeRadioForUpdate(t *testing.T) {
 	}{
 		{
 			"min_rssi 0 dropped when disabled",
-			unifi.DeviceRadioTable{MinRssiEnabled: false, MinRssi: i64(0)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(false), MinRssi: i64(0)},
 			func(r unifi.DeviceRadioTable) bool { return r.MinRssi == nil },
 		},
 		{
 			"min_rssi kept when enabled+valid",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(-82)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(-82)},
 			func(r unifi.DeviceRadioTable) bool { return r.MinRssi != nil && *r.MinRssi == -82 },
 		},
 		{
 			"min_rssi >=0 dropped even if enabled",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(0)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(0)},
 			func(r unifi.DeviceRadioTable) bool { return r.MinRssi == nil },
 		},
 		{
 			"min_rssi out-of-range high (-10) dropped",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(-10)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(-10)},
 			func(r unifi.DeviceRadioTable) bool { return r.MinRssi == nil },
 		},
 		{
 			"min_rssi out-of-range low (-95) dropped",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(-95)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(-95)},
 			func(r unifi.DeviceRadioTable) bool { return r.MinRssi == nil },
 		},
 		{
 			"min_rssi boundary -90 kept",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(-90)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(-90)},
 			func(r unifi.DeviceRadioTable) bool { return r.MinRssi != nil },
 		},
 		{
@@ -63,17 +63,17 @@ func TestSanitizeRadioForUpdate(t *testing.T) {
 		},
 		{
 			"sens_level 0 dropped when disabled",
-			unifi.DeviceRadioTable{SensLevelEnabled: false, SensLevel: i64(0)},
+			unifi.DeviceRadioTable{SensLevelEnabled: boolPtr(false), SensLevel: i64(0)},
 			func(r unifi.DeviceRadioTable) bool { return r.SensLevel == nil },
 		},
 		{
 			"sens_level out-of-range (-10) dropped even if enabled",
-			unifi.DeviceRadioTable{SensLevelEnabled: true, SensLevel: i64(-10)},
+			unifi.DeviceRadioTable{SensLevelEnabled: boolPtr(true), SensLevel: i64(-10)},
 			func(r unifi.DeviceRadioTable) bool { return r.SensLevel == nil },
 		},
 		{
 			"sens_level in-range (-70) kept when enabled",
-			unifi.DeviceRadioTable{SensLevelEnabled: true, SensLevel: i64(-70)},
+			unifi.DeviceRadioTable{SensLevelEnabled: boolPtr(true), SensLevel: i64(-70)},
 			func(r unifi.DeviceRadioTable) bool { return r.SensLevel != nil },
 		},
 		// assisted_roaming_rssi cases removed: UniFi dropped 802.11k assisted
@@ -109,19 +109,19 @@ func TestSanitizeRadioForUpdate_WarnsWhenEnabledAndOutOfRange(t *testing.T) {
 	}{
 		{
 			"min_rssi enabled+out-of-range warns",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(-10)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(-10)},
 			true,
 			"min_rssi",
 		},
 		{
 			"min_rssi disabled+out-of-range silent",
-			unifi.DeviceRadioTable{MinRssiEnabled: false, MinRssi: i64(-10)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(false), MinRssi: i64(-10)},
 			false,
 			"",
 		},
 		{
 			"min_rssi enabled+in-range silent",
-			unifi.DeviceRadioTable{MinRssiEnabled: true, MinRssi: i64(-80)},
+			unifi.DeviceRadioTable{MinRssiEnabled: boolPtr(true), MinRssi: i64(-80)},
 			false,
 			"",
 		},
@@ -143,13 +143,13 @@ func TestSanitizeRadioForUpdate_WarnsWhenEnabledAndOutOfRange(t *testing.T) {
 		},
 		{
 			"sens_level enabled+out-of-range warns",
-			unifi.DeviceRadioTable{SensLevelEnabled: true, SensLevel: i64(-10)},
+			unifi.DeviceRadioTable{SensLevelEnabled: boolPtr(true), SensLevel: i64(-10)},
 			true,
 			"sens_level",
 		},
 		{
 			"sens_level disabled+out-of-range silent",
-			unifi.DeviceRadioTable{SensLevelEnabled: false, SensLevel: i64(-10)},
+			unifi.DeviceRadioTable{SensLevelEnabled: boolPtr(false), SensLevel: i64(-10)},
 			false,
 			"",
 		},

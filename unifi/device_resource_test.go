@@ -229,10 +229,10 @@ func Test_buildMinimalUpdateDevice_switchVLANEnabled(t *testing.T) {
 			Type:              "uap",
 			MAC:               "aa:bb:cc:dd:ee:ff",
 			Name:              "Test AP",
-			SwitchVLANEnabled: true,
+			SwitchVLANEnabled: boolPtr(true),
 		}
 		body := buildMinimalUpdateDevice(deviceReq, nil, nil)
-		if !body.SwitchVLANEnabled {
+		if !boolOrFalse(body.SwitchVLANEnabled) {
 			t.Fatal("SwitchVLANEnabled = false, want true (toggle dropped from PUT)")
 		}
 		raw, err := json.Marshal(body)
@@ -252,7 +252,7 @@ func Test_buildMinimalUpdateDevice_switchVLANEnabled(t *testing.T) {
 			Name: "Test AP",
 		}
 		body := buildMinimalUpdateDevice(deviceReq, nil, nil)
-		if body.SwitchVLANEnabled {
+		if boolOrFalse(body.SwitchVLANEnabled) {
 			t.Errorf("SwitchVLANEnabled = true, want false when unconfigured")
 		}
 		raw, err := json.Marshal(body)
@@ -279,8 +279,8 @@ func Test_buildMinimalUpdateDevice_vwireEnabled(t *testing.T) {
 			MAC:  "aa:bb:cc:dd:ee:ff",
 			Name: "Test AP",
 			RadioTable: []unifi.DeviceRadioTable{
-				{Name: "wifi0", Radio: "ng", VwireEnabled: true},
-				{Name: "wifi1", Radio: "na", VwireEnabled: true},
+				{Name: "wifi0", Radio: "ng", VwireEnabled: boolPtr(true)},
+				{Name: "wifi1", Radio: "na", VwireEnabled: boolPtr(true)},
 			},
 		}
 		body := buildMinimalUpdateDevice(deviceReq, nil, nil)
@@ -291,7 +291,7 @@ func Test_buildMinimalUpdateDevice_vwireEnabled(t *testing.T) {
 			)
 		}
 		for _, radio := range body.RadioTable {
-			if !radio.VwireEnabled {
+			if !boolOrFalse(radio.VwireEnabled) {
 				t.Fatalf(
 					"radio %q VwireEnabled = false, want true (toggle dropped from PUT)",
 					radio.Name,
@@ -357,10 +357,10 @@ func Test_buildMinimalUpdateDevice_meshStaVapEnabled(t *testing.T) {
 			Type:              "uap",
 			MAC:               "aa:bb:cc:dd:ee:ff",
 			Name:              "Test AP",
-			MeshStaVapEnabled: true,
+			MeshStaVapEnabled: boolPtr(true),
 		}
 		body := buildMinimalUpdateDevice(deviceReq, nil, nil)
-		if !body.MeshStaVapEnabled {
+		if !boolOrFalse(body.MeshStaVapEnabled) {
 			t.Fatal("MeshStaVapEnabled = false, want true (toggle dropped from PUT)")
 		}
 		raw, err := json.Marshal(body)
@@ -380,7 +380,7 @@ func Test_buildMinimalUpdateDevice_meshStaVapEnabled(t *testing.T) {
 			Name: "Test AP",
 		}
 		body := buildMinimalUpdateDevice(deviceReq, nil, nil)
-		if body.MeshStaVapEnabled {
+		if boolOrFalse(body.MeshStaVapEnabled) {
 			t.Errorf("MeshStaVapEnabled = true, want false when unconfigured")
 		}
 		raw, err := json.Marshal(body)
@@ -2388,8 +2388,8 @@ func Test_buildMinimalUpdateDevice_carriesConfigurableFields(t *testing.T) {
 		LedOverride:                "on",
 		LedOverrideColor:           "#00ff00",
 		LedOverrideColorBrightness: ptrInt64(20),
-		SwitchVLANEnabled:          true,
-		MeshStaVapEnabled:          true,
+		SwitchVLANEnabled:          boolPtr(true),
+		MeshStaVapEnabled:          boolPtr(true),
 		ConfigNetwork:              &unifi.DeviceConfigNetwork{Type: "dhcp"},
 		RadioTable:                 []unifi.DeviceRadioTable{{Name: "wifi0", Radio: "ng"}},
 	}

@@ -1203,7 +1203,7 @@ func TestWAN_nestedGroupsRoundTrip(t *testing.T) {
 		WANDHCPv6PDSize:         ptrInt64(56),
 		WANDHCPv6PDSizeAuto:     true,
 		WANDsliteRemoteHost:     new("aftr.isp.net"),
-		WANDsliteRemoteHostAuto: true,
+		WANDsliteRemoteHostAuto: new(true),
 	}
 
 	model := &wanResourceModel{}
@@ -1260,7 +1260,7 @@ func TestWAN_nestedGroupsRoundTrip(t *testing.T) {
 		t.Errorf("dhcpv6.pd round trip: %v %v", back.WANDHCPv6PDSize, back.WANDHCPv6PDSizeAuto)
 	}
 	if back.WANDsliteRemoteHost == nil || *back.WANDsliteRemoteHost != "aftr.isp.net" ||
-		!back.WANDsliteRemoteHostAuto {
+		!boolOrFalse(back.WANDsliteRemoteHostAuto) {
 		t.Errorf("dslite round trip: %v %v", back.WANDsliteRemoteHost, back.WANDsliteRemoteHostAuto)
 	}
 
@@ -1279,7 +1279,7 @@ func TestWAN_nestedGroupsRoundTrip(t *testing.T) {
 	}
 	if back.WANIPV6DNS1 != nil || back.WANIPV6DNSPreference != nil ||
 		back.WANDHCPv6PDSize != nil || back.WANDHCPv6PDSizeAuto ||
-		back.WANDsliteRemoteHost != nil || back.WANDsliteRemoteHostAuto {
+		back.WANDsliteRemoteHost != nil || back.WANDsliteRemoteHostAuto != nil {
 		t.Errorf("unknown/null groups leaked into the request: %+v", back)
 	}
 
