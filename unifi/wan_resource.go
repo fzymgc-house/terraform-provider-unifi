@@ -1107,7 +1107,7 @@ func (r *wanResource) Create(
 		// If a WAN configuration already exists for this network group,
 		// adopt the existing one and update it with the planned configuration.
 		if strings.Contains(err.Error(), "WanConfigurationForNetworkGroupAlreadyExists") {
-			createdNetwork, err = r.adoptExistingWAN(ctx, site, network)
+			createdNetwork, err = r.adoptExistingWAN(ctx, site, &plan, network)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Client Error",
@@ -1181,9 +1181,12 @@ func (r *wanResource) Create(
 }
 
 // adoptExistingWAN finds the existing WAN network in the given network group and updates it.
+// adoptExistingWAN finds the existing WAN network in the given network group and lays the plan
+// over it, so the adoption keeps every key that the resource does not declare.
 func (r *wanResource) adoptExistingWAN(
 	ctx context.Context,
 	site string,
+	plan *wanResourceModel,
 	network *unifi.Network,
 ) (*unifi.Network, error) {
 	networks, err := r.client.ListNetwork(ctx, site)
@@ -1213,8 +1216,12 @@ func (r *wanResource) adoptExistingWAN(
 		)
 	}
 
-	network.ID = existing.ID
-	return r.client.UpdateNetwork(ctx, site, network)
+	adopted, diags := r.planOntoNetwork(ctx, plan, existing)
+	if diags.HasError() {
+		return nil, fmt.Errorf("building the adopted WAN network: %v", diags)
+	}
+	adopted.ID = existing.ID
+	return r.client.UpdateNetwork(ctx, site, adopted)
 }
 
 // overlayConfig applies only explicitly-configured values from config onto state.
@@ -1403,16 +1410,26 @@ func (r *wanResource) Update(
 		return
 	}
 
-	// Step 3: Convert the updated state to API format
-	network, diags := r.modelToNetwork(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	site := state.Site.ValueString()
 	if site == "" {
 		site = r.client.Site
+	}
+
+	// Step 3: Read the network as the controller holds it, then lay the updated state over
+	// it. The controller replaces the whole object on update, so a fresh struct would delete
+	// every key that the resource does not declare.
+	live, err := r.client.GetNetwork(ctx, site, state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			fmt.Sprintf("Unable to read WAN network before the update, got error: %s", err),
+		)
+		return
+	}
+	network, diags := r.planOntoNetwork(ctx, &state, live)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	// Step 4: Send to API
@@ -1638,6 +1655,19 @@ func (r *wanResource) modelToNetwork(
 	ctx context.Context,
 	model *wanResourceModel,
 ) (*unifi.Network, diag.Diagnostics) {
+	return r.planOntoNetwork(ctx, model, nil)
+}
+
+// planOntoNetwork lays the model over base, the WAN network as the controller holds it, and
+// returns the object to send. The controller replaces the whole network on update, and the
+// resource declares only part of it, so every field that the model leaves null or unknown
+// keeps its live value (the firewall zone, the routing table, the controller's own UUID). A
+// nil base is a create.
+func (r *wanResource) planOntoNetwork(
+	ctx context.Context,
+	model *wanResourceModel,
+	base *unifi.Network,
+) (*unifi.Network, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	// Preserve the interface's WAN network group (WAN, WAN2, …). Hard-coding "WAN"
@@ -1650,13 +1680,16 @@ func (r *wanResource) modelToNetwork(
 		networkGroup = model.NetworkGroup.ValueString()
 	}
 
-	network := &unifi.Network{
-		Name:            model.Name.ValueStringPointer(),
-		Purpose:         unifi.PurposeWAN, // Statically set to "wan"
-		WANNetworkGroup: new(networkGroup),
-		HiddenID:        networkGroup,
-		Enabled:         model.Enabled.ValueBool(),
+	network := &unifi.Network{}
+	if base != nil {
+		live := *base
+		network = &live
 	}
+	network.Name = model.Name.ValueStringPointer()
+	network.Purpose = unifi.PurposeWAN // Statically set to "wan"
+	network.WANNetworkGroup = new(networkGroup)
+	network.HiddenID = networkGroup
+	network.Enabled = model.Enabled.ValueBool()
 
 	// WAN Type — type has a Default so it's always known;
 	// type_v6 may be unknown on Create.
