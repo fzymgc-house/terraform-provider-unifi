@@ -6,14 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Features
 
-<<<<<<< HEAD
 - **`unifi_setting`: new `radio_ai` section, the nightly channel optimizer.** `enabled`, `auto_enabled`, `default`, `optimize`, `radios`, `cron_expr`, `setting_preference`, `auto_channel_presets_type`, `auto_adjust_channels_to_country`, the channel and width lists per band, `exclude_devices` and `high_priority_devices`. With the optimizer on, the controller rewrites a channel that a `unifi_device` states and the next plan shows the move as drift, so a site that plans its channels needs the optimizer held off in the same configuration. The controller replaces the whole section on write, so the provider reads it first and writes every unset field back as it was, the channel blacklist and the per-radio widths included. Requires go-unifi with `RadioAi.AutoEnabled` (fzymgc-house/go-unifi#8).
 
-||||||| ae3e9fe2
-=======
 - **`unifi_wlan`: `rrm_enabled` and the roaming assistant.** `rrm_enabled` is 802.11k neighbour reports. `roaming_assistant_na_enabled`, `roaming_assistant_na_rssi`, `roaming_assistant_6e_enabled` and `roaming_assistant_6e_rssi` are the per-band roaming assistant and its threshold in dBm. Every one of them is managed only when stated: unset, an update keeps the value the controller holds, and a read maps a key the controller omits to null. Before this, the five settings stayed controller-owned, and a UI change to them was invisible to the plan.
 
->>>>>>> origin/fzymgc
 - **`unifi_network`: `ipv6_setting_preference` and `dhcp_v6_server.allow_slaac`.** The UI of a UniFi gateway stores `ipv6_setting_preference = manual` and `dhcpdv6_allow_slaac = true` on a network with prefix delegation. The provider had no attribute for either key, so a network that Terraform moved to prefix delegation did not hold what the UI writes. Both attributes are optional and are managed only when configured: an unset attribute stays off the wire and null in state, on import too, so a network that does not declare it plans no change. The `unifi_network` data source reads `dhcp_v6_server.allow_slaac`. Requires go-unifi with `Network.DHCPDV6AllowSlaac` as a pointer (fzymgc-house/go-unifi#4).
 
 - **`unifi_wlan`: `passphrase_wo_version`.** Terraform never compares a write-only value, so a rotated `passphrase_wo` reached the controller only when something else changed. Change the version number with the passphrase, and the next apply sends it. The number is a marker: it has no controller side and is never sensitive.
