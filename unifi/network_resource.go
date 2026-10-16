@@ -856,12 +856,15 @@ func (r *networkResource) Schema(
 								Computed:            true,
 								Default:             booldefault.StaticBool(false),
 							},
+							// The computed children below keep a prior non-null value only. When
+							// dhcp_server is new, their prior value is null and must stay unknown:
+							// the controller fills them in on the write.
 							"server": schema.StringAttribute{
 								MarkdownDescription: "TFTP server for boot options.",
 								Optional:            true,
 								Computed:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.UseStateForUnknown(),
+									stringplanmodifier.UseNonNullStateForUnknown(),
 								},
 							},
 							"filename": schema.StringAttribute{
@@ -869,12 +872,12 @@ func (r *networkResource) Schema(
 								Optional:            true,
 								Computed:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.UseStateForUnknown(),
+									stringplanmodifier.UseNonNullStateForUnknown(),
 								},
 							},
 						},
 						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
+							objectplanmodifier.UseNonNullStateForUnknown(),
 						},
 					},
 					"enabled": schema.BoolAttribute{
@@ -883,6 +886,8 @@ func (r *networkResource) Schema(
 						Computed:            true,
 						Default:             booldefault.StaticBool(true),
 					},
+					// start and stop keep a prior non-null value only. When dhcp_server
+					// is new, the controller derives both from the subnet on the write.
 					"start": schema.StringAttribute{
 						MarkdownDescription: "The IPv4 address where the DHCP range starts.",
 						Optional:            true,
@@ -891,7 +896,7 @@ func (r *networkResource) Schema(
 							validators.IPv4Validator(),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							stringplanmodifier.UseNonNullStateForUnknown(),
 						},
 					},
 					"stop": schema.StringAttribute{
@@ -902,7 +907,7 @@ func (r *networkResource) Schema(
 							validators.IPv4Validator(),
 						},
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							stringplanmodifier.UseNonNullStateForUnknown(),
 						},
 					},
 					"gateway_enabled": schema.BoolAttribute{

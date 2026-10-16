@@ -144,13 +144,6 @@ func portProfilePortSecurityAttrTypes() map[string]attr.Type {
 // the default (e.g. bcast.enabled = true) and re-plans every computed
 // attribute of the resource on every run.
 
-func portProfileDot1xDefault() types.Object {
-	return types.ObjectValueMust(portDot1xAttrTypes(), map[string]attr.Value{
-		"ctrl":         types.StringValue("force_authorized"),
-		"idle_timeout": timetypes.NewGoDurationValue(5 * time.Minute),
-	})
-}
-
 func portProfileLldpmedDefault() types.Object {
 	return types.ObjectValueMust(portLldpmedAttrTypes(), map[string]attr.Value{
 		"enabled":        types.BoolValue(true),
@@ -293,10 +286,14 @@ func (r *portProfileResource) Schema(
 				Default:     booldefault.StaticBool(true),
 			},
 			"dot1x": schema.SingleNestedAttribute{
-				Description: "802.1X port authentication settings for the port profile.",
-				Optional:    true,
-				Computed:    true,
-				Default:     objectdefault.StaticValue(portProfileDot1xDefault()),
+				Description: "802.1X port authentication settings for the port profile. Unset, the " +
+					"group is read from the controller, so a profile the controller stores without " +
+					"an idle timeout imports with no change.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"ctrl": schema.StringAttribute{
 						Description: "The type of 802.1X control to use. Can be `auto`, `force_authorized`, `force_unauthorized`, `mac_based` or `multi_host`.",
@@ -315,11 +312,15 @@ func (r *portProfileResource) Schema(
 					},
 					"idle_timeout": schema.StringAttribute{
 						Description: "The idle timeout to use when using MAC Based 802.1X control, as a " +
-							"Go duration string (e.g. `5m`, `300s`). Defaults to `5m0s`.",
+							"Go duration string (e.g. `5m`, `300s`). Unset means the controller's own " +
+							"default: the value stays off the wire and is read back from the controller, " +
+							"so a profile the controller stores without the key imports with no change.",
 						CustomType: timetypes.GoDurationType{},
 						Optional:   true,
 						Computed:   true,
-						Default:    stringdefault.StaticString("5m0s"),
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 						Validators: []validator.String{
 							validators.GoDurationBetween(0, 65535*time.Second),
 							validators.GoDurationMultipleOf(time.Second),

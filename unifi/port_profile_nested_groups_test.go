@@ -3,7 +3,9 @@ package unifi
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -120,7 +122,7 @@ func TestPortProfileNestedGroups_wireAndReadBack(t *testing.T) {
 		OpMode: types.StringValue("switch"),
 		Dot1X: types.ObjectValueMust(portDot1xAttrTypes(), map[string]attr.Value{
 			"ctrl":         types.StringValue("mac_based"),
-			"idle_timeout": portProfileDot1xDefault().Attributes()["idle_timeout"],
+			"idle_timeout": timetypes.NewGoDurationValue(5 * time.Minute),
 		}),
 		EgressRateLimit: types.ObjectValueMust(
 			portEgressRateLimitAttrTypes(),
@@ -214,7 +216,7 @@ func TestPortProfileNestedGroups_wireAndReadBack(t *testing.T) {
 		Stormctrl: types.ObjectUnknown(portStormctrlAttrTypes()),
 		Dot1X: types.ObjectValueMust(portDot1xAttrTypes(), map[string]attr.Value{
 			"ctrl":         types.StringValue("auto"),
-			"idle_timeout": portProfileDot1xDefault().Attributes()["idle_timeout"],
+			"idle_timeout": timetypes.NewGoDurationValue(5 * time.Minute),
 		}),
 	}
 	state := back
