@@ -135,6 +135,11 @@ type wlanFrameworkResourceModel struct {
 	BssTransition               types.Bool   `tfsdk:"bss_transition"`
 	Uapsd                       types.Bool   `tfsdk:"uapsd"`
 	FastRoamingEnabled          types.Bool   `tfsdk:"fast_roaming_enabled"`
+	RrmEnabled                  types.Bool   `tfsdk:"rrm_enabled"`
+	RoamingAssistantNaEnabled   types.Bool   `tfsdk:"roaming_assistant_na_enabled"`
+	RoamingAssistantNaRssi      types.Int64  `tfsdk:"roaming_assistant_na_rssi"`
+	RoamingAssistant6EEnabled   types.Bool   `tfsdk:"roaming_assistant_6e_enabled"`
+	RoamingAssistant6ERssi      types.Int64  `tfsdk:"roaming_assistant_6e_rssi"`
 	MinimumDataRate2GKbps       types.Int64  `tfsdk:"minimum_data_rate_2g_kbps"`
 	MinimumDataRate5GKbps       types.Int64  `tfsdk:"minimum_data_rate_5g_kbps"`
 	MinrateSettingPreference    types.String `tfsdk:"minrate_setting_preference"`
@@ -504,6 +509,58 @@ func (r *wlanFrameworkResource) Schema(
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+			},
+			"rrm_enabled": schema.BoolAttribute{
+				MarkdownDescription: "Enable 802.11k neighbour reports, so a client learns the nearby " +
+					"access points from the one it is on. Unset, the controller keeps its own value.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"roaming_assistant_na_enabled": schema.BoolAttribute{
+				MarkdownDescription: "Enable the roaming assistant on 5 GHz: the access point drops a " +
+					"client whose signal is below `roaming_assistant_na_rssi`, so it looks for a " +
+					"closer radio. Unset, the controller keeps its own value.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"roaming_assistant_na_rssi": schema.Int64Attribute{
+				MarkdownDescription: "The 5 GHz roaming assistant threshold in dBm, for example `-77`. " +
+					"Unset, the controller keeps its own value, and null when the WLAN holds none.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.Int64{
+					int64validator.Between(-100, -40),
+				},
+			},
+			"roaming_assistant_6e_enabled": schema.BoolAttribute{
+				MarkdownDescription: "Enable the roaming assistant on 6 GHz. See " +
+					"`roaming_assistant_na_enabled`. Unset, the controller keeps its own value.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"roaming_assistant_6e_rssi": schema.Int64Attribute{
+				MarkdownDescription: "The 6 GHz roaming assistant threshold in dBm, for example `-88`. " +
+					"Unset, the controller keeps its own value, and null when the WLAN holds none.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.Int64{
+					int64validator.Between(-100, -40),
+				},
 			},
 			"minimum_data_rate_2g_kbps": schema.Int64Attribute{
 				MarkdownDescription: "Minimum data rate for 2G clients in Kbps. " +
@@ -1404,6 +1461,21 @@ func (r *wlanFrameworkResource) applyPlanToState(
 	if !plan.FastRoamingEnabled.IsNull() && !plan.FastRoamingEnabled.IsUnknown() {
 		state.FastRoamingEnabled = plan.FastRoamingEnabled
 	}
+	if !plan.RrmEnabled.IsNull() && !plan.RrmEnabled.IsUnknown() {
+		state.RrmEnabled = plan.RrmEnabled
+	}
+	if !plan.RoamingAssistantNaEnabled.IsNull() && !plan.RoamingAssistantNaEnabled.IsUnknown() {
+		state.RoamingAssistantNaEnabled = plan.RoamingAssistantNaEnabled
+	}
+	if !plan.RoamingAssistantNaRssi.IsNull() && !plan.RoamingAssistantNaRssi.IsUnknown() {
+		state.RoamingAssistantNaRssi = plan.RoamingAssistantNaRssi
+	}
+	if !plan.RoamingAssistant6EEnabled.IsNull() && !plan.RoamingAssistant6EEnabled.IsUnknown() {
+		state.RoamingAssistant6EEnabled = plan.RoamingAssistant6EEnabled
+	}
+	if !plan.RoamingAssistant6ERssi.IsNull() && !plan.RoamingAssistant6ERssi.IsUnknown() {
+		state.RoamingAssistant6ERssi = plan.RoamingAssistant6ERssi
+	}
 	if !plan.MinimumDataRate2GKbps.IsNull() && !plan.MinimumDataRate2GKbps.IsUnknown() {
 		state.MinimumDataRate2GKbps = plan.MinimumDataRate2GKbps
 	}
@@ -1615,6 +1687,23 @@ func (r *wlanFrameworkResource) planOntoWLAN(
 	wlan.BssTransition = plan.BssTransition.ValueBool()
 	wlan.UapsdEnabled = plan.Uapsd.ValueBool()
 	wlan.FastRoamingEnabled = plan.FastRoamingEnabled.ValueBool()
+	// The roaming fields are managed only when stated. Unset, the live value stays, and on a
+	// create the controller picks its default.
+	if !plan.RrmEnabled.IsNull() && !plan.RrmEnabled.IsUnknown() {
+		wlan.RrmEnabled = plan.RrmEnabled.ValueBool()
+	}
+	if !plan.RoamingAssistantNaEnabled.IsNull() && !plan.RoamingAssistantNaEnabled.IsUnknown() {
+		wlan.RoamingAssistantNaEnabled = plan.RoamingAssistantNaEnabled.ValueBoolPointer()
+	}
+	if !plan.RoamingAssistantNaRssi.IsNull() && !plan.RoamingAssistantNaRssi.IsUnknown() {
+		wlan.RoamingAssistantNaRssi = plan.RoamingAssistantNaRssi.ValueInt64Pointer()
+	}
+	if !plan.RoamingAssistant6EEnabled.IsNull() && !plan.RoamingAssistant6EEnabled.IsUnknown() {
+		wlan.RoamingAssistant6EEnabled = plan.RoamingAssistant6EEnabled.ValueBoolPointer()
+	}
+	if !plan.RoamingAssistant6ERssi.IsNull() && !plan.RoamingAssistant6ERssi.IsUnknown() {
+		wlan.RoamingAssistant6ERssi = plan.RoamingAssistant6ERssi.ValueInt64Pointer()
+	}
 	// Unknown/null → "" → omitempty keeps it off the wire, so controllers
 	// without per-SSID band steering are never sent the key (#388).
 	wlan.BandsteeringMode = plan.BandsteeringMode.ValueString()
@@ -1986,6 +2075,13 @@ func (r *wlanFrameworkResource) wlanToModel(
 	model.BssTransition = types.BoolValue(wlan.BssTransition)
 	model.Uapsd = types.BoolValue(wlan.UapsdEnabled)
 	model.FastRoamingEnabled = types.BoolValue(wlan.FastRoamingEnabled)
+	model.RrmEnabled = types.BoolValue(wlan.RrmEnabled)
+	// The controller omits the roaming assistant keys from a WLAN that never had them, so a
+	// missing key reads as null rather than as a value the WLAN does not hold.
+	model.RoamingAssistantNaEnabled = types.BoolPointerValue(wlan.RoamingAssistantNaEnabled)
+	model.RoamingAssistantNaRssi = types.Int64PointerValue(wlan.RoamingAssistantNaRssi)
+	model.RoamingAssistant6EEnabled = types.BoolPointerValue(wlan.RoamingAssistant6EEnabled)
+	model.RoamingAssistant6ERssi = types.Int64PointerValue(wlan.RoamingAssistant6ERssi)
 
 	if wlan.MinrateSettingPreference != "" {
 		model.MinrateSettingPreference = types.StringValue(wlan.MinrateSettingPreference)
