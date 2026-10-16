@@ -285,7 +285,10 @@ resource "unifi_port_profile" "groups" {
 					resource.TestCheckResourceAttrSet("unifi_port_profile.groups", "id"),
 					check("dot1x.ctrl", "auto"),
 					// No idle timeout is stored until one is set, and the leaf has no default.
-					resource.TestCheckNoResourceAttr("unifi_port_profile.groups", "dot1x.idle_timeout"),
+					resource.TestCheckNoResourceAttr(
+						"unifi_port_profile.groups",
+						"dot1x.idle_timeout",
+					),
 					check("egress_rate_limit.enabled", "true"),
 					check("egress_rate_limit.kbps", "1000"),
 					check("port_security.enabled", "true"),
