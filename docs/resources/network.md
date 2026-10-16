@@ -235,11 +235,12 @@ Optional:
 
 Optional:
 
-- `aliases` (List of String) List of IPv6 aliases for the network. Not currently supported: the underlying UniFi API client has no field for this value, so a non-empty list is rejected at plan time (#413).
+- `aliases` (List of String) List of additional IPv6 addresses on the network, in CIDR notation (e.g. `fd00:601::1/64`). The gateway holds each one on the network beside the prefix from `interface_type`, such as a ULA gateway address beside a delegated prefix. Unset, the controller keeps its own list.
 - `client_address_assignment` (String) How clients on this network obtain an IPv6 address (UI: Networks → IPv6 → Client Address Assignment). One of `slaac` (SLAAC only), `dhcpv6` (DHCPv6 only), or `slaac-dhcpv6` (both). Computed from the controller when not set.
 - `interface_type` (String) Specifies which type of IPv6 connection to use. Must be one of `none`, `pd`, or `static`. Taken from the controller when not set; an adopted network keeps the type it already has (#544).
 - `pd` (Attributes) IPv6 Prefix Delegation (PD) settings, used when `interface_type` is `pd`. (see [below for nested schema](#nestedatt--ipv6--pd))
 - `ra` (Attributes) IPv6 Router Advertisement (RA) settings. (see [below for nested schema](#nestedatt--ipv6--ra))
+- `setting_preference` (String) Whether the controller (`auto`) or this configuration (`manual`) decides the IPv6 settings of the network. The UI of a UniFi gateway stores `manual` on a network whose IPv6 settings were set by hand. Leave it unset to keep the value the controller holds: the provider then does not send the key and does not read it.
 - `static_subnet` (String) The IPv6 static subnet of the network. Only used when `interface_type` is `static`.
 
 <a id="nestedatt--ipv6--pd"></a>

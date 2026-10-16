@@ -26,7 +26,10 @@ func Test_portProfileResource_dot1xIdleTimeoutHasNoDefault(t *testing.T) {
 	}
 	idle, ok := dot1x.Attributes["idle_timeout"].(schema.StringAttribute)
 	if !ok {
-		t.Fatalf("dot1x.idle_timeout is %T, want schema.StringAttribute", dot1x.Attributes["idle_timeout"])
+		t.Fatalf(
+			"dot1x.idle_timeout is %T, want schema.StringAttribute",
+			dot1x.Attributes["idle_timeout"],
+		)
 	}
 	if idle.Default != nil {
 		t.Errorf(
@@ -35,7 +38,11 @@ func Test_portProfileResource_dot1xIdleTimeoutHasNoDefault(t *testing.T) {
 		)
 	}
 	if !idle.Optional || !idle.Computed {
-		t.Errorf("dot1x.idle_timeout Optional=%v Computed=%v, want both true", idle.Optional, idle.Computed)
+		t.Errorf(
+			"dot1x.idle_timeout Optional=%v Computed=%v, want both true",
+			idle.Optional,
+			idle.Computed,
+		)
 	}
 }
 

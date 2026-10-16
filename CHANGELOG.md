@@ -2,6 +2,60 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.1] - fzymgc-house fork
+
+This release moves the fzymgc-house fork from its 2026-08 base onto upstream `main`
+(after v0.60.0-beta.0) and re-applies the fork's own work. It consumes
+`github.com/fzymgc-house/go-unifi` through a `replace` directive: the go-unifi models are
+regenerated from Network 10.6.106, and the generator injects the keys the controller stores
+that the field specification does not list.
+
+### ⚠️ Breaking Changes
+
+- **`unifi_device_ports` (schema v1): `port_security`, `dot1x`, `egress_rate_limit`, `lldpmed`
+  and `stormctrl` are nested objects**, the shape `unifi_device.port_override` uses. `stormctrl`
+  holds one object per traffic class (`bcast`, `mcast`, `ucast`) with `enabled` and `rate`, and
+  `lldpmed` gains `notify_enabled`. The state upgrader nests the flat v0 keys, so only the
+  configuration changes: `dot1x_ctrl = "auto"` becomes `dot1x = { ctrl = "auto" }`.
+- **`unifi_wlan`: the fork's flat `roaming_assistant_na_enabled`, `roaming_assistant_na_rssi`,
+  `roaming_assistant_6e_enabled` and `roaming_assistant_6e_rssi` are replaced by upstream's
+  `roaming_assistant_na` and `roaming_assistant_6e` objects.** The state upgrader nests the flat
+  keys.
+- **`unifi_network`: the fork's `ipv6_setting_preference` moves to `ipv6.setting_preference`.** The
+  state upgrader moves the key.
+- **`unifi_port_profile`: `dot1x` and `dot1x.idle_timeout` carry no static default.** Both are read
+  from the controller when the configuration leaves them out, so a profile the controller stores
+  without `dot1x_idle_timeout` imports with no change.
+
+### ✨ Features
+
+- **`unifi_device_ports`**: the complete port configuration of a switch, with a port action. One
+  resource per device, instead of `port_override` blocks, which are now deprecated on
+  `unifi_device`.
+- **`unifi_setting`: new `radio_ai` section**, the nightly channel optimizer. The controller
+  replaces the whole section on write, so the provider reads it first and writes every unset field
+  back as it was.
+- **`unifi_wlan`: `passphrase_wo_version` and `rrm_enabled`.** The version number makes a rotated
+  write-only passphrase reach the controller. `rrm_enabled` turns 802.11k neighbour reports on or
+  off.
+- **`unifi_network`: `ipv6.aliases` reaches the controller**, `ipv6.setting_preference` and
+  `dhcp_v6_server.allow_slaac` are managed only when configured.
+
+### 🐛 Bug Fixes
+
+- **Keep the live keys on update.** The controller replaces the whole object on update, and each
+  resource declares only part of it. `unifi_wlan`, `unifi_wan`, `unifi_bgp` and `unifi_network`
+  now read the object as the controller holds it and lay the plan over it, so the firewall zone,
+  the IPv6 aliases, the SAE parameters, the mDNS proxy mode, the routing table, the controller's own
+  UUID and every other undeclared key keep their value.
+- **A declared boolean reaches the wire as false.** The radio table booleans,
+  `mesh_sta_vap_enabled`, `switch_vlan_enabled`, `mac_override_enabled` and
+  `wan_dslite_remote_host_auto` are pointers in go-unifi, so an update can turn a toggle off.
+- **`unifi_wlan`: `mac_filter.policy` and `group_rekey` carry no static default**, so a WLAN the UI
+  created imports with no change. A create that enables the filter without a policy uses `deny`.
+- **`unifi_network`: a new `dhcp_server` block plans `start`, `stop` and `boot` as unknown**, so the
+  values the controller fills in do not fail the apply.
+
 ## [Unreleased]
 
 ### ✨ Features

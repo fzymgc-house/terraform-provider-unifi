@@ -77,7 +77,11 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 		t.Errorf("Passphrase = %q, want the live key kept for a null plan", got.Passphrase)
 	}
 	if len(got.SaeGroups) != 2 || got.SaeSync == nil || *got.SaeSync != 5 {
-		t.Errorf("SaeGroups = %v, SaeSync = %v, want the live SAE parameters", got.SaeGroups, got.SaeSync)
+		t.Errorf(
+			"SaeGroups = %v, SaeSync = %v, want the live SAE parameters",
+			got.SaeGroups,
+			got.SaeSync,
+		)
 	}
 	if got.MdnsProxyMode != "off" || got.SettingPreference != "manual" ||
 		got.RADIUSMACaclFormat != "none" || !got.MinrateNgAdvertisingRates {
@@ -87,7 +91,10 @@ func Test_wlanFrameworkResource_planOntoWLAN_keepsLiveFields(t *testing.T) {
 		t.Errorf("ApGroupIDs = %v, want the planned list to replace the live one", got.ApGroupIDs)
 	}
 	if len(got.BroadcastFilterList) != 1 {
-		t.Errorf("BroadcastFilterList = %v, want the live list kept for a null plan", got.BroadcastFilterList)
+		t.Errorf(
+			"BroadcastFilterList = %v, want the live list kept for a null plan",
+			got.BroadcastFilterList,
+		)
 	}
 	if live.Name != "old" || len(live.ApGroupIDs) != 1 || live.ApGroupIDs[0] != "group-live" {
 		t.Errorf("planOntoWLAN changed its base: %+v", live)
@@ -131,7 +138,10 @@ func Test_wlanFrameworkResource_passphraseWOVersion(t *testing.T) {
 	plan.PassphraseWOVersion = types.Int64Null()
 	r.applyPlanToState(ctx, &plan, &state)
 	if !state.PassphraseWOVersion.IsNull() {
-		t.Errorf("PassphraseWOVersion = %v, want null once the config drops it", state.PassphraseWOVersion)
+		t.Errorf(
+			"PassphraseWOVersion = %v, want null once the config drops it",
+			state.PassphraseWOVersion,
+		)
 	}
 }
 

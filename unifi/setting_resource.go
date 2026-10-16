@@ -1678,19 +1678,25 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Whether the nightly optimizer runs.",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"auto_enabled": schema.BoolAttribute{
 						MarkdownDescription: "A second toggle that Network 10.6 stores beside `enabled`. State it as the controller holds it.",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"default": schema.BoolAttribute{
 						MarkdownDescription: "Whether the section still holds the controller defaults.",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"optimize": schema.ListAttribute{
 						MarkdownDescription: "What the optimizer changes. Values: `channel`, `power`.",
@@ -1698,7 +1704,9 @@ func (r *settingResource) Schema(
 						Optional:            true,
 						Computed:            true,
 						Validators: []validator.List{
-							listvalidator.ValueStringsAre(stringvalidator.OneOf("channel", "power")),
+							listvalidator.ValueStringsAre(
+								stringvalidator.OneOf("channel", "power"),
+							),
 						},
 						PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 					},
@@ -1716,7 +1724,9 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "When it runs, as a cron expression in the time zone of the site, for example `0 3 * * *`.",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"setting_preference": schema.StringAttribute{
 						MarkdownDescription: "Whether the controller manages the section (`auto`) or the values below are set by hand (`manual`).",
@@ -1725,7 +1735,9 @@ func (r *settingResource) Schema(
 						Validators: []validator.String{
 							stringvalidator.OneOf("auto", "manual"),
 						},
-						PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"auto_channel_presets_type": schema.StringAttribute{
 						MarkdownDescription: "The channel preset. One of `maximum_speed`, `conservative`, `custom`.",
@@ -1734,62 +1746,80 @@ func (r *settingResource) Schema(
 						Validators: []validator.String{
 							stringvalidator.OneOf("maximum_speed", "conservative", "custom"),
 						},
-						PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"auto_adjust_channels_to_country": schema.BoolAttribute{
 						MarkdownDescription: "Whether the channel lists are limited to the regulatory domain of the site.",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"channels_ng": schema.ListAttribute{
 						MarkdownDescription: "The 2.4 GHz channels the optimizer can pick from.",
 						ElementType:         types.Int64Type,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"channels_na": schema.ListAttribute{
 						MarkdownDescription: "The 5 GHz channels the optimizer can pick from.",
 						ElementType:         types.Int64Type,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"channels_6e": schema.ListAttribute{
 						MarkdownDescription: "The 6 GHz channels the optimizer can pick from.",
 						ElementType:         types.Int64Type,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"ht_modes_ng": schema.ListAttribute{
 						MarkdownDescription: "The 2.4 GHz channel widths the optimizer can pick from, in MHz.",
 						ElementType:         types.Int64Type,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"ht_modes_na": schema.ListAttribute{
 						MarkdownDescription: "The 5 GHz channel widths the optimizer can pick from, in MHz.",
 						ElementType:         types.Int64Type,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"exclude_devices": schema.ListAttribute{
 						MarkdownDescription: "MAC addresses of the access points the optimizer leaves alone.",
 						ElementType:         types.StringType,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"high_priority_devices": schema.ListAttribute{
 						MarkdownDescription: "MAC addresses of the access points the optimizer serves first.",
 						ElementType:         types.StringType,
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers:       []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+						PlanModifiers: []planmodifier.List{
+							listplanmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},

@@ -91,14 +91,12 @@ Optional:
 
 - `aggregate_members` (Set of Number) Port indexes in the link aggregation group led by this port, this port included.
 - `autoneg` (Boolean) Negotiate link speed and duplex automatically.
-- `dot1x_ctrl` (String) 802.1X control mode. One of `auto`, `force_authorized`, `force_unauthorized`, `mac_based`, `multi_host`.
-- `dot1x_idle_timeout` (Number) 802.1X idle timeout in seconds.
-- `egress_rate_limit_kbps` (Number) Egress rate limit in kbps.
-- `egress_rate_limit_kbps_enabled` (Boolean) Enable egress rate limiting.
+- `dot1x` (Attributes) 802.1X port authentication. (see [below for nested schema](#nestedatt--ports--dot1x))
+- `egress_rate_limit` (Attributes) Egress rate limiting. (see [below for nested schema](#nestedatt--ports--egress_rate_limit))
 - `excluded_networkconf_ids` (Set of String) Networks not tagged on the port when `tagged_vlan_mgmt` is `custom`.
 - `full_duplex` (Boolean) Use full duplex when `autoneg` is false.
 - `isolation` (Boolean) Isolate the port from other isolated ports.
-- `lldpmed_enabled` (Boolean) Enable LLDP-MED.
+- `lldpmed` (Attributes) LLDP-MED. (see [below for nested schema](#nestedatt--ports--lldpmed))
 - `mirror_port_idx` (Number) Index of the port mirrored to this one when `op_mode` is `mirror`.
 - `multicast_router_mode` (String) Multicast router mode. One of `ALL`, `CUSTOM`, `NONE`.
 - `name` (String) Port name shown in the UniFi UI.
@@ -107,17 +105,11 @@ Optional:
 - `poe_mode` (String) PoE mode. One of `auto`, `pasv24`, `passthrough`, `off`.
 - `port_keepalive_enabled` (Boolean) Enable port keepalive.
 - `port_profile_id` (String) ID of the port profile applied to the port. Settings declared on the port take precedence over the profile.
-- `port_security_enabled` (Boolean) Restrict the port to `port_security_mac_address`.
-- `port_security_mac_address` (Set of String) MAC addresses allowed when `port_security_enabled` is true.
+- `port_security` (Attributes) Port security: a MAC allow-list for the port. (see [below for nested schema](#nestedatt--ports--port_security))
 - `sd_wan_underlay_port` (Boolean) Use the port as an SD-WAN underlay.
 - `setting_preference` (String) Whether the port's settings are chosen automatically or set manually. One of `auto`, `manual`.
 - `speed` (Number) Link speed in Mbps when `autoneg` is false.
-- `stormctrl_bcast_enabled` (Boolean) Enable broadcast storm control.
-- `stormctrl_bcast_rate` (Number) Broadcast storm control rate in packets per second.
-- `stormctrl_mcast_enabled` (Boolean) Enable multicast storm control.
-- `stormctrl_mcast_rate` (Number) Multicast storm control rate in packets per second.
-- `stormctrl_ucast_enabled` (Boolean) Enable unknown-unicast storm control.
-- `stormctrl_ucast_rate` (Number) Unknown-unicast storm control rate in packets per second.
+- `stormctrl` (Attributes) Storm control, per traffic class. (see [below for nested schema](#nestedatt--ports--stormctrl))
 - `stp_bpdu_guard_enabled` (Boolean) Enable spanning tree BPDU guard.
 - `stp_edge_state` (String) Spanning tree edge-port state. One of `auto`, `enabled`, `disabled`.
 - `stp_port_mode` (Boolean) Run spanning tree on the port.
@@ -127,6 +119,77 @@ Optional:
 Read-Only:
 
 - `lag_idx` (Number) Link aggregation group index assigned by the controller.
+
+<a id="nestedatt--ports--dot1x"></a>
+### Nested Schema for `ports.dot1x`
+
+Optional:
+
+- `ctrl` (String) 802.1X control mode. One of `auto`, `force_authorized`, `force_unauthorized`, `mac_based`, `multi_host`.
+- `idle_timeout` (Number) 802.1X idle timeout in seconds.
+
+
+<a id="nestedatt--ports--egress_rate_limit"></a>
+### Nested Schema for `ports.egress_rate_limit`
+
+Optional:
+
+- `enabled` (Boolean) Enable egress rate limiting.
+- `kbps` (Number) Egress rate limit in kbps.
+
+
+<a id="nestedatt--ports--lldpmed"></a>
+### Nested Schema for `ports.lldpmed`
+
+Optional:
+
+- `enabled` (Boolean) Enable LLDP-MED.
+- `notify_enabled` (Boolean) Enable LLDP-MED topology change notifications.
+
+
+<a id="nestedatt--ports--port_security"></a>
+### Nested Schema for `ports.port_security`
+
+Optional:
+
+- `enabled` (Boolean) Restrict the port to `mac_address`.
+- `mac_address` (Set of String) MAC addresses allowed when `enabled` is true.
+
+
+<a id="nestedatt--ports--stormctrl"></a>
+### Nested Schema for `ports.stormctrl`
+
+Optional:
+
+- `bcast` (Attributes) Storm control for broadcast traffic. (see [below for nested schema](#nestedatt--ports--stormctrl--bcast))
+- `mcast` (Attributes) Storm control for multicast traffic. (see [below for nested schema](#nestedatt--ports--stormctrl--mcast))
+- `ucast` (Attributes) Storm control for unknown-unicast traffic. (see [below for nested schema](#nestedatt--ports--stormctrl--ucast))
+
+<a id="nestedatt--ports--stormctrl--bcast"></a>
+### Nested Schema for `ports.stormctrl.bcast`
+
+Optional:
+
+- `enabled` (Boolean) Enable broadcast storm control.
+- `rate` (Number) broadcast storm control rate in packets per second.
+
+
+<a id="nestedatt--ports--stormctrl--mcast"></a>
+### Nested Schema for `ports.stormctrl.mcast`
+
+Optional:
+
+- `enabled` (Boolean) Enable multicast storm control.
+- `rate` (Number) multicast storm control rate in packets per second.
+
+
+<a id="nestedatt--ports--stormctrl--ucast"></a>
+### Nested Schema for `ports.stormctrl.ucast`
+
+Optional:
+
+- `enabled` (Boolean) Enable unknown-unicast storm control.
+- `rate` (Number) unknown-unicast storm control rate in packets per second.
 
 ## Import
 

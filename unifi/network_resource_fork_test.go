@@ -36,7 +36,8 @@ func Test_preserveUnmanagedKeys(t *testing.T) {
 	if unset.FirewallZoneID == nil || *unset.FirewallZoneID != "zone-live" {
 		t.Errorf("FirewallZoneID = %v, want the live zone", unset.FirewallZoneID)
 	}
-	if len(unset.IPV6Aliases) != 1 || unset.IPV6SettingPreference == nil || unset.DHCPDV6AllowSlaac == nil {
+	if len(unset.IPV6Aliases) != 1 || unset.IPV6SettingPreference == nil ||
+		unset.DHCPDV6AllowSlaac == nil {
 		t.Errorf("an unset key lost its live value: %+v", unset)
 	}
 
@@ -92,13 +93,22 @@ func Test_networkResource_ipv6Aliases_toNetwork(t *testing.T) {
 		types.StringNull(),
 	))
 	if cleared.IPV6Aliases == nil || len(cleared.IPV6Aliases) != 0 {
-		t.Errorf("IPV6Aliases = %#v, want an empty non-nil list for a configured []", cleared.IPV6Aliases)
+		t.Errorf(
+			"IPV6Aliases = %#v, want an empty non-nil list for a configured []",
+			cleared.IPV6Aliases,
+		)
 	}
 	if cleared.IPV6SettingPreference != nil {
-		t.Errorf("IPV6SettingPreference = %v, want nil for an unset attribute", *cleared.IPV6SettingPreference)
+		t.Errorf(
+			"IPV6SettingPreference = %v, want nil for an unset attribute",
+			*cleared.IPV6SettingPreference,
+		)
 	}
 
-	unset, _ := r.modelToNetwork(ctx, withAliases(types.ListNull(types.StringType), types.StringNull()))
+	unset, _ := r.modelToNetwork(
+		ctx,
+		withAliases(types.ListNull(types.StringType), types.StringNull()),
+	)
 	if unset.IPV6Aliases != nil {
 		t.Errorf("IPV6Aliases = %#v, want nil for a null list", unset.IPV6Aliases)
 	}
@@ -142,7 +152,10 @@ func Test_ipv6ManagedLeaves(t *testing.T) {
 		t.Fatalf("decode: %v", d)
 	}
 	if out.SettingPreference.ValueString() != "manual" {
-		t.Errorf("SettingPreference = %v, want manual once the configuration states it", out.SettingPreference)
+		t.Errorf(
+			"SettingPreference = %v, want manual once the configuration states it",
+			out.SettingPreference,
+		)
 	}
 	if out.Aliases.IsNull() || len(out.Aliases.Elements()) != 0 {
 		t.Errorf("Aliases = %v, want a known empty list for a configured []", out.Aliases)

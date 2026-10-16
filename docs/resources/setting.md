@@ -140,6 +140,7 @@ resource "unifi_setting" "device_isolation" {
 - `mgmt` (Attributes) Management settings. (see [below for nested schema](#nestedatt--mgmt))
 - `network_optimization` (Attributes) Automated network optimization settings. (see [below for nested schema](#nestedatt--network_optimization))
 - `ntp` (Attributes) NTP (time server) settings. (see [below for nested schema](#nestedatt--ntp))
+- `radio_ai` (Attributes) The nightly channel optimizer (the `radio_ai` setting). With `enabled` on, the controller runs on `cron_expr` and rewrites the channel, and with `power` in `optimize` the transmit power, of every radio it is allowed to touch, which undoes a channel that a `unifi_device` states. The controller replaces the whole section on write, so the provider reads it first and writes every unset field back as it was, the channel blacklist and the per-radio widths included. Fields left unset keep the controller's current value across updates. (see [below for nested schema](#nestedatt--radio_ai))
 - `radius` (Attributes) RADIUS settings. (see [below for nested schema](#nestedatt--radius))
 - `site` (String) The name of the site to associate the settings with.
 - `syslog` (Attributes) Remote syslog (rsyslogd) settings. (see [below for nested schema](#nestedatt--syslog))
@@ -379,6 +380,29 @@ Optional:
 - `ntp_server_3` (String) Third NTP server.
 - `ntp_server_4` (String) Fourth NTP server.
 - `setting_preference` (String) Configuration mode: `auto` or `manual`.
+
+
+<a id="nestedatt--radio_ai"></a>
+### Nested Schema for `radio_ai`
+
+Optional:
+
+- `auto_adjust_channels_to_country` (Boolean) Whether the channel lists are limited to the regulatory domain of the site.
+- `auto_channel_presets_type` (String) The channel preset. One of `maximum_speed`, `conservative`, `custom`.
+- `auto_enabled` (Boolean) A second toggle that Network 10.6 stores beside `enabled`. State it as the controller holds it.
+- `channels_6e` (List of Number) The 6 GHz channels the optimizer can pick from.
+- `channels_na` (List of Number) The 5 GHz channels the optimizer can pick from.
+- `channels_ng` (List of Number) The 2.4 GHz channels the optimizer can pick from.
+- `cron_expr` (String) When it runs, as a cron expression in the time zone of the site, for example `0 3 * * *`.
+- `default` (Boolean) Whether the section still holds the controller defaults.
+- `enabled` (Boolean) Whether the nightly optimizer runs.
+- `exclude_devices` (List of String) MAC addresses of the access points the optimizer leaves alone.
+- `high_priority_devices` (List of String) MAC addresses of the access points the optimizer serves first.
+- `ht_modes_na` (List of Number) The 5 GHz channel widths the optimizer can pick from, in MHz.
+- `ht_modes_ng` (List of Number) The 2.4 GHz channel widths the optimizer can pick from, in MHz.
+- `optimize` (List of String) What the optimizer changes. Values: `channel`, `power`.
+- `radios` (List of String) The radios it touches. Values: `ng`, `na`, `6e`.
+- `setting_preference` (String) Whether the controller manages the section (`auto`) or the values below are set by hand (`manual`).
 
 
 <a id="nestedatt--radius"></a>

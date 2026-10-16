@@ -29,11 +29,13 @@ func Test_bgpResource_planOntoBGP_keepsLiveFields(t *testing.T) {
 	}
 
 	plan := &bgpResourceModel{
-		Enabled:        types.BoolValue(true),
-		Config:         types.StringValue("router bgp 65000\n bgp router-id 192.168.200.1"),
-		ASN:            types.Int64Null(),
-		RouterID:       types.StringNull(),
-		Peers:          types.ListNull(types.ObjectType{AttrTypes: bgpPeerModel{}.AttributeTypes()}),
+		Enabled:  types.BoolValue(true),
+		Config:   types.StringValue("router bgp 65000\n bgp router-id 192.168.200.1"),
+		ASN:      types.Int64Null(),
+		RouterID: types.StringNull(),
+		Peers: types.ListNull(
+			types.ObjectType{AttrTypes: bgpPeerModel{}.AttributeTypes()},
+		),
 		UploadFileName: types.StringValue("bgpd.conf"),
 		Description:    types.StringValue("new"),
 	}
@@ -100,11 +102,17 @@ func Test_wanResource_planOntoNetwork_keepsLiveKeys(t *testing.T) {
 	if got.WANType == nil || *got.WANType != "pppoe" {
 		t.Errorf("WANType = %v, want the planned type", got.WANType)
 	}
-	if got.ExternalID != "ext-1" || got.FirewallZoneID == nil || *got.FirewallZoneID != "zone-ext" ||
-		got.RoutingTableID == nil || *got.RoutingTableID != 201 ||
-		got.UplinkIDentity == nil || *got.UplinkIDentity != "eth4" ||
-		got.IsWifiTethering == nil || *got.IsWifiTethering {
-		t.Errorf("an undeclared key lost its live value: %+v", got)
+	if got.ExternalID != "ext-1" || got.FirewallZoneID == nil || *got.FirewallZoneID != "zone-ext" {
+		t.Errorf("external_id or the firewall zone lost its live value: %+v", got)
+	}
+	if got.RoutingTableID == nil || *got.RoutingTableID != 201 {
+		t.Errorf("RoutingTableID = %v, want the live 201", got.RoutingTableID)
+	}
+	if got.UplinkIDentity == nil || *got.UplinkIDentity != "eth4" {
+		t.Errorf("UplinkIDentity = %v, want the live eth4", got.UplinkIDentity)
+	}
+	if got.IsWifiTethering == nil || *got.IsWifiTethering {
+		t.Errorf("IsWifiTethering = %v, want the live false", got.IsWifiTethering)
 	}
 	if live.WANType == nil || *live.WANType != "dhcp" {
 		t.Errorf("planOntoNetwork changed its base: %+v", live)

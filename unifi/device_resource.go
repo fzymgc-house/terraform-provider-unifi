@@ -3855,7 +3855,8 @@ func sanitizeRadioForUpdate(radioName string, radio *unifi.DeviceRadioTable) dia
 		)
 	}
 
-	if boolOrFalse(radio.MinRssiEnabled) && radio.MinRssi != nil && !inRange(radio.MinRssi, -90, -67) {
+	if boolOrFalse(radio.MinRssiEnabled) && radio.MinRssi != nil &&
+		!inRange(radio.MinRssi, -90, -67) {
 		warnDropped("min_rssi", *radio.MinRssi, -90, -67)
 	}
 	if !boolOrFalse(radio.MinRssiEnabled) || !inRange(radio.MinRssi, -90, -67) {
@@ -3874,7 +3875,8 @@ func sanitizeRadioForUpdate(radioName string, radio *unifi.DeviceRadioTable) dia
 	if !inRange(radio.Maxsta, 1, 200) {
 		radio.Maxsta = nil
 	}
-	if boolOrFalse(radio.SensLevelEnabled) && radio.SensLevel != nil && !inRange(radio.SensLevel, -90, -50) {
+	if boolOrFalse(radio.SensLevelEnabled) && radio.SensLevel != nil &&
+		!inRange(radio.SensLevel, -90, -50) {
 		warnDropped("sens_level", *radio.SensLevel, -90, -50)
 	}
 	if !boolOrFalse(radio.SensLevelEnabled) || !inRange(radio.SensLevel, -90, -50) {

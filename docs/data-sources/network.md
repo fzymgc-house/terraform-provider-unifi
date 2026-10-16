@@ -151,6 +151,7 @@ Read-Only:
 
 Read-Only:
 
+- `allow_slaac` (Boolean) Whether clients on the network can form an address by SLAAC beside the DHCPv6 server (the controller's `dhcpdv6_allow_slaac`).
 - `dns` (Attributes) DNS servers handed out to DHCPv6 clients. (see [below for nested schema](#nestedatt--dhcp_v6_server--dns))
 - `enabled` (Boolean) Specifies whether stateful DHCPv6 is enabled.
 - `lease` (Number) Lease time for DHCPv6 addresses in seconds.

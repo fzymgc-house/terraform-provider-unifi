@@ -107,6 +107,7 @@ resource "unifi_wlan" "wifi" {
 - `no2ghz_oui` (Boolean) Connect high performance clients to 5 GHz only.
 - `passphrase` (String, Sensitive) The passphrase for the network, only required if `security` is not `open`. Stored in state — use `passphrase_wo` to avoid persisting the secret.
 - `passphrase_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only equivalent of `passphrase` (Terraform 1.11+). Used at apply time but never written to state, so it can be sourced from an ephemeral resource (e.g. a Vault secret). Mutually exclusive with `passphrase`.
+- `passphrase_wo_version` (Number) A version number for `passphrase_wo`. Terraform never compares a write-only value, so a new passphrase in its source produces no update on its own. Change this number whenever the passphrase changes, and the next apply sends the new `passphrase_wo` to the controller.
 - `pmf_mode` (String) Enable Protected Management Frames. This cannot be disabled if using WPA 3.
 - `private_preshared_keys` (Attributes List) Private pre-shared keys (PPSK): a list of per-key passphrases, each optionally bound to its own network/VLAN. Only valid when `private_preshared_keys_enabled` is `true`. (see [below for nested schema](#nestedatt--private_preshared_keys))
 - `private_preshared_keys_enabled` (Boolean) Whether per-key (PPSK) passphrases are enabled for this WLAN. Requires `security = wpapsk`.
@@ -114,6 +115,7 @@ resource "unifi_wlan" "wifi" {
 - `radius` (Attributes) RADIUS settings. (see [below for nested schema](#nestedatt--radius))
 - `roaming_assistant_6e` (Attributes) 6 GHz roaming assistant. Disconnects clients whose signal drops below `rssi` so they re-associate with a closer AP. (see [below for nested schema](#nestedatt--roaming_assistant_6e))
 - `roaming_assistant_na` (Attributes) 5 GHz roaming assistant. Disconnects clients whose signal drops below `rssi` so they re-associate with a closer AP. Replaces the device-level `radio_table.assisted_roaming_*` attributes, which UniFi Network 10.x moved to the WLAN. (see [below for nested schema](#nestedatt--roaming_assistant_na))
+- `rrm_enabled` (Boolean) Enable 802.11k neighbour reports, so a client learns the nearby access points from the one it is on. Unset, the controller keeps its own value.
 - `schedule` (Block List) Start and stop schedules for the WLAN (see [below for nested schema](#nestedblock--schedule))
 - `site` (String) The name of the site to associate the WLAN with.
 - `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
@@ -145,7 +147,7 @@ Optional:
 
 - `enabled` (Boolean) Indicates whether or not the MAC filter is turned on for the network.
 - `list` (Set of String) List of MAC addresses to filter (only valid if `enabled` is `true`).
-- `policy` (String) MAC address filter policy (only valid if `enabled` is `true`).
+- `policy` (String) MAC address filter policy (only valid if `enabled` is `true`). Unset, the controller keeps its own value. A default here would plan a change on every WLAN the UI created, because the framework applies a nested default even when `mac_filter` is absent from the config. A create that enables the filter without a policy uses `deny`.
 
 
 <a id="nestedatt--private_preshared_keys"></a>

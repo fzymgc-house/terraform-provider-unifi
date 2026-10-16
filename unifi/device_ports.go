@@ -521,7 +521,14 @@ func encodeDeclaredFields(
 			if !ok || !cok || configObj.IsUnknown() {
 				continue
 			}
-			diags.Append(encodeDeclaredFields(ctx, f.children, planObj.Attributes(), configObj.Attributes(), entry)...)
+			diags.Append(
+				encodeDeclaredFields(
+					ctx,
+					f.children,
+					planObj.Attributes(),
+					configObj.Attributes(),
+					entry,
+				)...)
 			continue
 		}
 		raw, d := encodePortValue(ctx, f, pv)

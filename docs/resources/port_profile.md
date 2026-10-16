@@ -42,7 +42,7 @@ resource "unifi_port_profile" "poe_disabled" {
 ### Optional
 
 - `autoneg` (Boolean) Enable link auto negotiation for the port profile. When set to `true` this overrides `speed`.
-- `dot1x` (Attributes) 802.1X port authentication settings for the port profile. (see [below for nested schema](#nestedatt--dot1x))
+- `dot1x` (Attributes) 802.1X port authentication settings for the port profile. Unset, the group is read from the controller, so a profile the controller stores without an idle timeout imports with no change. (see [below for nested schema](#nestedatt--dot1x))
 - `egress_rate_limit` (Attributes) Egress rate limiting for the port profile. Computed from the controller when not set; disable with `enabled = false` rather than by removing the block. (see [below for nested schema](#nestedatt--egress_rate_limit))
 - `excluded_networkconf_ids` (Set of String) The IDs of networks excluded from the port profile (used when `tagged_vlan_mgmt` is `custom`). Computed from the controller when not set.
 - `fec_mode` (String) Forward Error Correction mode. Can be `rs-fec`, `fc-fec`, `default`, or `disabled`.
@@ -81,7 +81,7 @@ resource "unifi_port_profile" "poe_disabled" {
 Optional:
 
 - `ctrl` (String) The type of 802.1X control to use. Can be `auto`, `force_authorized`, `force_unauthorized`, `mac_based` or `multi_host`.
-- `idle_timeout` (String) The idle timeout to use when using MAC Based 802.1X control, as a Go duration string (e.g. `5m`, `300s`). Defaults to `5m0s`.
+- `idle_timeout` (String) The idle timeout to use when using MAC Based 802.1X control, as a Go duration string (e.g. `5m`, `300s`). Unset means the controller's own default: the value stays off the wire and is read back from the controller, so a profile the controller stores without the key imports with no change.
 
 
 <a id="nestedatt--egress_rate_limit"></a>
