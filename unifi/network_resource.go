@@ -1043,6 +1043,14 @@ func (r *networkResource) Schema(
 				MarkdownDescription: "DHCPv6 server configuration.",
 				Optional:            true,
 				Attributes: map[string]schema.Attribute{
+					"allow_slaac": schema.BoolAttribute{
+						MarkdownDescription: "Whether clients on the network can form an address by " +
+							"SLAAC (the controller's `dhcpdv6_allow_slaac`). The UI of a UniFi gateway " +
+							"stores `true` on a network with prefix delegation. Leave it unset to keep " +
+							"the value the controller holds: the provider then does not send the key " +
+							"and does not read it.",
+						Optional: true,
+					},
 					"enabled": schema.BoolAttribute{
 						MarkdownDescription: "Specifies whether the DHCPv6 server is enabled.",
 						Optional:            true,

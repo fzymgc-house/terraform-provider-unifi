@@ -214,6 +214,7 @@ Optional:
 
 Optional:
 
+- `allow_slaac` (Boolean) Whether clients on the network can form an address by SLAAC (the controller's `dhcpdv6_allow_slaac`). The UI of a UniFi gateway stores `true` on a network with prefix delegation. Leave it unset to keep the value the controller holds: the provider then does not send the key and does not read it.
 - `dns` (Attributes) DNS servers handed out to DHCPv6 clients. (see [below for nested schema](#nestedatt--dhcp_v6_server--dns))
 - `enabled` (Boolean) Specifies whether the DHCPv6 server is enabled.
 - `lease` (Number) The lease time for DHCPv6 addresses in seconds.
