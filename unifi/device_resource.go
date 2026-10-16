@@ -3108,20 +3108,20 @@ func (r *deviceResource) radioTableToFramework(
 			Ht:                     types.Int64PointerValue(radio.Ht),
 			TxPower:                stringOrNull(radio.TxPower),
 			TxPowerMode:            stringOrNull(radio.TxPowerMode),
-			MinRssiEnabled:         types.BoolValue(radio.MinRssiEnabled),
+			MinRssiEnabled:         types.BoolValue(boolOrFalse(radio.MinRssiEnabled)),
 			MinRssi:                types.Int64PointerValue(radio.MinRssi),
 			AntennaGain:            types.Int64PointerValue(radio.AntennaGain),
 			AntennaID:              types.Int64PointerValue(radio.AntennaID),
-			AssistedRoamingEnabled: types.BoolValue(radio.AssistedRoamingEnabled),
+			AssistedRoamingEnabled: types.BoolValue(boolOrFalse(radio.AssistedRoamingEnabled)),
 			AssistedRoamingRssi:    types.Int64PointerValue(radio.AssistedRoamingRssi),
-			Dfs:                    types.BoolValue(radio.Dfs),
-			HardNoiseFloorEnabled:  types.BoolValue(radio.HardNoiseFloorEnabled),
-			LoadbalanceEnabled:     types.BoolValue(radio.LoadbalanceEnabled),
+			Dfs:                    types.BoolValue(boolOrFalse(radio.Dfs)),
+			HardNoiseFloorEnabled:  types.BoolValue(boolOrFalse(radio.HardNoiseFloorEnabled)),
+			LoadbalanceEnabled:     types.BoolValue(boolOrFalse(radio.LoadbalanceEnabled)),
 			Maxsta:                 types.Int64PointerValue(radio.Maxsta),
 			Name:                   stringOrNull(radio.Name),
 			SensLevel:              types.Int64PointerValue(radio.SensLevel),
-			SensLevelEnabled:       types.BoolValue(radio.SensLevelEnabled),
-			VwireEnabled:           types.BoolValue(radio.VwireEnabled),
+			SensLevelEnabled:       types.BoolValue(boolOrFalse(radio.SensLevelEnabled)),
+			VwireEnabled:           types.BoolValue(boolOrFalse(radio.VwireEnabled)),
 		}
 
 		objVal, objDiags := types.ObjectValueFrom(ctx, radioTableAttrTypes(), model)
@@ -3349,6 +3349,22 @@ func int64PointerIfKnown(v types.Int64) *int64 {
 	return v.ValueInt64Pointer()
 }
 
+// boolPointerIfKnown does the same for the radio_table bools, which go-unifi
+// models as *bool. A known value goes on the wire, false included, so an
+// update can turn a field off. An undeclared field is Unknown in the plan and
+// stays off the wire, so the controller keeps its stored value.
+func boolPointerIfKnown(v types.Bool) *bool {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	return v.ValueBoolPointer()
+}
+
+// boolOrFalse reads a radio_table bool that the controller left out as false.
+func boolOrFalse(b *bool) bool {
+	return b != nil && *b
+}
+
 // mergeRadioTableFromDevice fills radio_table fields the user left unset from
 // the device's current radio table (entries matched by radio band, falling
 // back to radio name). Two controller behaviors make this necessary (#427):
@@ -3445,10 +3461,11 @@ func sanitizeRadioForUpdate(radioName string, radio *unifi.DeviceRadioTable) dia
 		)
 	}
 
-	if radio.MinRssiEnabled && radio.MinRssi != nil && !inRange(radio.MinRssi, -90, -67) {
+	if boolOrFalse(radio.MinRssiEnabled) && radio.MinRssi != nil &&
+		!inRange(radio.MinRssi, -90, -67) {
 		warnDropped("min_rssi", *radio.MinRssi, -90, -67)
 	}
-	if !radio.MinRssiEnabled || !inRange(radio.MinRssi, -90, -67) {
+	if !boolOrFalse(radio.MinRssiEnabled) || !inRange(radio.MinRssi, -90, -67) {
 		radio.MinRssi = nil
 	}
 	// maxsta has no "enabled" flag — it's Optional+Computed with UseStateForUnknown,
@@ -3464,17 +3481,18 @@ func sanitizeRadioForUpdate(radioName string, radio *unifi.DeviceRadioTable) dia
 	if !inRange(radio.Maxsta, 1, 200) {
 		radio.Maxsta = nil
 	}
-	if radio.SensLevelEnabled && radio.SensLevel != nil && !inRange(radio.SensLevel, -90, -50) {
+	if boolOrFalse(radio.SensLevelEnabled) && radio.SensLevel != nil &&
+		!inRange(radio.SensLevel, -90, -50) {
 		warnDropped("sens_level", *radio.SensLevel, -90, -50)
 	}
-	if !radio.SensLevelEnabled || !inRange(radio.SensLevel, -90, -50) {
+	if !boolOrFalse(radio.SensLevelEnabled) || !inRange(radio.SensLevel, -90, -50) {
 		radio.SensLevel = nil
 	}
-	if radio.AssistedRoamingEnabled && radio.AssistedRoamingRssi != nil &&
+	if boolOrFalse(radio.AssistedRoamingEnabled) && radio.AssistedRoamingRssi != nil &&
 		!inRange(radio.AssistedRoamingRssi, -80, -60) {
 		warnDropped("assisted_roaming_rssi", *radio.AssistedRoamingRssi, -80, -60)
 	}
-	if !radio.AssistedRoamingEnabled || !inRange(radio.AssistedRoamingRssi, -80, -60) {
+	if !boolOrFalse(radio.AssistedRoamingEnabled) || !inRange(radio.AssistedRoamingRssi, -80, -60) {
 		radio.AssistedRoamingRssi = nil
 	}
 
@@ -3512,20 +3530,20 @@ func (r *deviceResource) frameworkToRadioTable(
 			Ht:                     int64PointerIfKnown(model.Ht),
 			TxPower:                model.TxPower.ValueString(),
 			TxPowerMode:            model.TxPowerMode.ValueString(),
-			MinRssiEnabled:         model.MinRssiEnabled.ValueBool(),
+			MinRssiEnabled:         boolPointerIfKnown(model.MinRssiEnabled),
 			MinRssi:                int64PointerIfKnown(model.MinRssi),
 			AntennaGain:            int64PointerIfKnown(model.AntennaGain),
 			AntennaID:              int64PointerIfKnown(model.AntennaID),
-			AssistedRoamingEnabled: model.AssistedRoamingEnabled.ValueBool(),
+			AssistedRoamingEnabled: boolPointerIfKnown(model.AssistedRoamingEnabled),
 			AssistedRoamingRssi:    int64PointerIfKnown(model.AssistedRoamingRssi),
-			Dfs:                    model.Dfs.ValueBool(),
-			HardNoiseFloorEnabled:  model.HardNoiseFloorEnabled.ValueBool(),
-			LoadbalanceEnabled:     model.LoadbalanceEnabled.ValueBool(),
+			Dfs:                    boolPointerIfKnown(model.Dfs),
+			HardNoiseFloorEnabled:  boolPointerIfKnown(model.HardNoiseFloorEnabled),
+			LoadbalanceEnabled:     boolPointerIfKnown(model.LoadbalanceEnabled),
 			Maxsta:                 int64PointerIfKnown(model.Maxsta),
 			Name:                   model.Name.ValueString(),
 			SensLevel:              int64PointerIfKnown(model.SensLevel),
-			SensLevelEnabled:       model.SensLevelEnabled.ValueBool(),
-			VwireEnabled:           model.VwireEnabled.ValueBool(),
+			SensLevelEnabled:       boolPointerIfKnown(model.SensLevelEnabled),
+			VwireEnabled:           boolPointerIfKnown(model.VwireEnabled),
 		}
 
 		diags.Append(sanitizeRadioForUpdate(radio.Radio, &radio)...)
