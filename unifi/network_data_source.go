@@ -487,6 +487,11 @@ func (d *networkDataSource) Schema(
 						MarkdownDescription: "Specifies whether stateful DHCPv6 is enabled.",
 						Computed:            true,
 					},
+					"allow_slaac": schema.BoolAttribute{
+						MarkdownDescription: "Whether clients on the network can form an address by SLAAC " +
+							"beside the DHCPv6 server (the controller's `dhcpdv6_allow_slaac`).",
+						Computed: true,
+					},
 					"dns": schema.SingleNestedAttribute{
 						MarkdownDescription: "DNS servers handed out to DHCPv6 clients.",
 						Computed:            true,
@@ -935,11 +940,12 @@ func (d *networkDataSource) setDataSourceData(
 		diags.Append(d...)
 
 		dhcpV6ServerValue := dhcpV6ServerModel{
-			Enabled: types.BoolValue(network.DHCPDV6Enabled),
-			DNS:     dhcpv6DNSObj,
-			Lease:   types.Int64PointerValue(network.DHCPDV6LeaseTime),
-			Start:   types.StringPointerValue(network.DHCPDV6Start),
-			Stop:    types.StringPointerValue(network.DHCPDV6Stop),
+			Enabled:    types.BoolValue(network.DHCPDV6Enabled),
+			DNS:        dhcpv6DNSObj,
+			Lease:      types.Int64PointerValue(network.DHCPDV6LeaseTime),
+			Start:      types.StringPointerValue(network.DHCPDV6Start),
+			Stop:       types.StringPointerValue(network.DHCPDV6Stop),
+			AllowSlaac: types.BoolPointerValue(network.DHCPDV6AllowSlaac),
 		}
 		dhcpV6ServerObj, d := types.ObjectValueFrom(
 			ctx,

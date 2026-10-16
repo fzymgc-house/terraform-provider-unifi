@@ -26,6 +26,7 @@ func testNetworkIPv6Object(interfaceType types.String) types.Object {
 		"client_address_assignment": types.StringNull(),
 		"static_subnet":             types.StringNull(),
 		"aliases":                   types.ListNull(types.StringType),
+		"setting_preference":        types.StringNull(),
 		"ra": types.ObjectValueMust(networkIPv6RAAttrTypes(), map[string]attr.Value{
 			"enabled":            types.BoolValue(false),
 			"priority":           types.StringNull(),
@@ -299,11 +300,12 @@ func TestNetworkNestedGroups_roundTrip(t *testing.T) {
 	}
 	dhcpV6 := func(dns types.Object) types.Object {
 		return types.ObjectValueMust(dhcpV6ServerModel{}.AttributeTypes(), map[string]attr.Value{
-			"enabled": types.BoolValue(true),
-			"dns":     dns,
-			"lease":   types.Int64Value(86400),
-			"start":   types.StringValue("::2"),
-			"stop":    types.StringValue("::7d1"),
+			"enabled":     types.BoolValue(true),
+			"allow_slaac": types.BoolNull(),
+			"dns":         dns,
+			"lease":       types.Int64Value(86400),
+			"start":       types.StringValue("::2"),
+			"stop":        types.StringValue("::7d1"),
 		})
 	}
 	base := func() *networkResourceModel {
@@ -325,6 +327,7 @@ func TestNetworkNestedGroups_roundTrip(t *testing.T) {
 		"client_address_assignment": types.StringValue("slaac"),
 		"static_subnet":             types.StringNull(),
 		"aliases":                   types.ListNull(types.StringType),
+		"setting_preference":        types.StringNull(),
 		"ra": types.ObjectValueMust(networkIPv6RAAttrTypes(), map[string]attr.Value{
 			"enabled":            types.BoolValue(true),
 			"priority":           types.StringValue("high"),
@@ -553,6 +556,7 @@ func TestNetworkIPv6_vlanOnlyPreservesPrevious(t *testing.T) {
 			"client_address_assignment": types.StringValue("dhcpv6"),
 			"static_subnet":             types.StringValue("fd00::1/64"),
 			"aliases":                   types.ListNull(types.StringType),
+			"setting_preference":        types.StringNull(),
 			"ra": types.ObjectValueMust(networkIPv6RAAttrTypes(), map[string]attr.Value{
 				"enabled":            types.BoolValue(true),
 				"priority":           types.StringUnknown(),

@@ -896,11 +896,12 @@ func Test_dhcpV6ServerModel_AttributeTypes(t *testing.T) {
 			name: "returns correct attribute types",
 			m:    dhcpV6ServerModel{},
 			want: map[string]attr.Type{
-				"enabled": types.BoolType,
-				"dns":     types.ObjectType{AttrTypes: dhcpV6DNSModel{}.AttributeTypes()},
-				"lease":   types.Int64Type,
-				"start":   types.StringType,
-				"stop":    types.StringType,
+				"enabled":     types.BoolType,
+				"dns":         types.ObjectType{AttrTypes: dhcpV6DNSModel{}.AttributeTypes()},
+				"lease":       types.Int64Type,
+				"start":       types.StringType,
+				"stop":        types.StringType,
+				"allow_slaac": types.BoolType,
 			},
 		},
 	}
@@ -2344,6 +2345,8 @@ func minimalNetworkPlan(ctx context.Context, t *testing.T) (tfsdk.Plan, tfsdk.Co
 // error instead of letting Create/Update silently drop it and produce a
 // confusing "provider produced inconsistent result after apply" failure (#413).
 // A wholly unknown ipv6 object hides the aliases value and is rejected too.
+// ipv6.aliases reaches the controller through go-unifi, so ModifyPlan accepts every shape of
+// the list, an unknown one included.
 func Test_networkResource_ModifyPlan_ipv6Aliases(t *testing.T) {
 	r := &networkResource{}
 	ctx := context.Background()
@@ -2360,22 +2363,22 @@ func Test_networkResource_ModifyPlan_ipv6Aliases(t *testing.T) {
 			wantError:   false,
 		},
 		{
-			name: "non-empty known list: error",
+			name: "non-empty known list: no error",
 			ipv6Aliases: types.ListValueMust(
 				types.StringType,
 				[]attr.Value{types.StringValue("2001:db8::1")},
 			),
-			wantError: true,
+			wantError: false,
 		},
 		{
-			name:        "unknown list: error",
+			name:        "unknown list: no error",
 			ipv6Aliases: types.ListUnknown(types.StringType),
-			wantError:   true,
+			wantError:   false,
 		},
 		{
-			name:        "empty known list: error",
+			name:        "empty known list: no error",
 			ipv6Aliases: types.ListValueMust(types.StringType, []attr.Value{}),
-			wantError:   true,
+			wantError:   false,
 		},
 		{
 			// ipv6 = var.x with x unknown until apply: the configuration itself
@@ -2383,9 +2386,9 @@ func Test_networkResource_ModifyPlan_ipv6Aliases(t *testing.T) {
 			// must reject it. (An omitted block also plans unknown on create,
 			// but planIPv6Defaults replaces that with its create-time shape
 			// before the guard runs.)
-			name:        "unknown ipv6 object: error",
+			name:        "unknown ipv6 object: no error",
 			ipv6Unknown: true,
-			wantError:   true,
+			wantError:   false,
 		},
 	}
 

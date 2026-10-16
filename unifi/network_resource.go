@@ -245,20 +245,22 @@ func dhcpV6DNSDefault() types.Object {
 
 // dhcpV6ServerModel describes the DHCPv6 server configuration.
 type dhcpV6ServerModel struct {
-	Enabled types.Bool   `tfsdk:"enabled"`
-	DNS     types.Object `tfsdk:"dns"`
-	Lease   types.Int64  `tfsdk:"lease"`
-	Start   types.String `tfsdk:"start"`
-	Stop    types.String `tfsdk:"stop"`
+	Enabled    types.Bool   `tfsdk:"enabled"`
+	DNS        types.Object `tfsdk:"dns"`
+	Lease      types.Int64  `tfsdk:"lease"`
+	Start      types.String `tfsdk:"start"`
+	Stop       types.String `tfsdk:"stop"`
+	AllowSlaac types.Bool   `tfsdk:"allow_slaac"`
 }
 
 func (m dhcpV6ServerModel) AttributeTypes() map[string]attr.Type {
 	return map[string]attr.Type{
-		"enabled": types.BoolType,
-		"dns":     types.ObjectType{AttrTypes: dhcpV6DNSModel{}.AttributeTypes()},
-		"lease":   types.Int64Type,
-		"start":   types.StringType,
-		"stop":    types.StringType,
+		"enabled":     types.BoolType,
+		"dns":         types.ObjectType{AttrTypes: dhcpV6DNSModel{}.AttributeTypes()},
+		"lease":       types.Int64Type,
+		"start":       types.StringType,
+		"stop":        types.StringType,
+		"allow_slaac": types.BoolType,
 	}
 }
 
@@ -268,6 +270,7 @@ type networkIPv6Model struct {
 	ClientAddressAssignment types.String `tfsdk:"client_address_assignment"`
 	StaticSubnet            types.String `tfsdk:"static_subnet"`
 	Aliases                 types.List   `tfsdk:"aliases"`
+	SettingPreference       types.String `tfsdk:"setting_preference"`
 	RA                      types.Object `tfsdk:"ra"`
 	PD                      types.Object `tfsdk:"pd"`
 }
@@ -278,6 +281,7 @@ func networkIPv6AttrTypes() map[string]attr.Type {
 		"client_address_assignment": types.StringType,
 		"static_subnet":             types.StringType,
 		"aliases":                   types.ListType{ElemType: types.StringType},
+		"setting_preference":        types.StringType,
 		"ra":                        types.ObjectType{AttrTypes: networkIPv6RAAttrTypes()},
 		"pd":                        types.ObjectType{AttrTypes: networkIPv6PDAttrTypes()},
 	}
@@ -355,6 +359,7 @@ func networkIPv6PlanShape() types.Object {
 		"client_address_assignment": types.StringUnknown(),
 		"static_subnet":             types.StringNull(),
 		"aliases":                   types.ListNull(types.StringType),
+		"setting_preference":        types.StringNull(),
 		"ra":                        networkIPv6RAPlanShape(),
 		"pd":                        networkIPv6PDPlanShape(),
 	})
@@ -645,11 +650,23 @@ func (r *networkResource) Schema(
 						Optional:            true,
 					},
 					"aliases": schema.ListAttribute{
-						MarkdownDescription: "List of IPv6 aliases for the network. Not currently supported: " +
-							"the underlying UniFi API client has no field for this value, so a " +
-							"non-empty list is rejected at plan time (#413).",
+						MarkdownDescription: "List of additional IPv6 addresses on the network, in CIDR notation " +
+							"(e.g. `fd00:601::1/64`). The gateway holds each one on the network beside the " +
+							"prefix from `interface_type`, such as a ULA gateway address beside a " +
+							"delegated prefix. Unset, the controller keeps its own list.",
 						Optional:    true,
 						ElementType: types.StringType,
+					},
+					"setting_preference": schema.StringAttribute{
+						MarkdownDescription: "Whether the controller (`auto`) or this configuration " +
+							"(`manual`) decides the IPv6 settings of the network. The UI of a UniFi " +
+							"gateway stores `manual` on a network whose IPv6 settings were set by hand. " +
+							"Leave it unset to keep the value the controller holds: the provider then " +
+							"does not send the key and does not read it.",
+						Optional: true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("auto", "manual"),
+						},
 					},
 					"ra": schema.SingleNestedAttribute{
 						MarkdownDescription: "IPv6 Router Advertisement (RA) settings.",
@@ -1159,6 +1176,7 @@ func nestNetworkState(state map[string]any) {
 		"ipv6_client_address_assignment": "client_address_assignment",
 		"ipv6_static_subnet":             "static_subnet",
 		"ipv6_aliases":                   "aliases",
+		"ipv6_setting_preference":        "setting_preference",
 		"ipv6_ra":                        "ra_enabled",
 		"ipv6_ra_priority":               "ra_priority",
 		"ipv6_ra_preferred_lifetime":     "ra_preferred_lifetime",
@@ -1361,38 +1379,6 @@ func (r *networkResource) ModifyPlan(
 				return
 			}
 		}
-	}
-
-	// ipv6.aliases: go-unifi's Network struct has no field for this yet, so a
-	// configured value can never reach the controller. Fail fast at plan time
-	// with a clear message instead of Create/Update silently dropping it and
-	// producing a confusing "provider produced inconsistent result after
-	// apply" error (#413).
-	// Read from the plan (not config) so that unknown values derived from
-	// data sources are caught here too. A wholly unknown ipv6 object hides
-	// the aliases value, so it is treated as unknown aliases. The plan is
-	// read from resp, where planIPv6Defaults above has already replaced the
-	// unknown object an omitted block produces on create with its shape.
-	aliasesPath := path.Root("ipv6").AtName("aliases")
-	var ipv6Obj types.Object
-	var ipv6Aliases types.List
-	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root("ipv6"), &ipv6Obj)...)
-	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, aliasesPath, &ipv6Aliases)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if ipv6Obj.IsUnknown() || !ipv6Aliases.IsNull() {
-		resp.Diagnostics.AddAttributeError(
-			aliasesPath,
-			"ipv6.aliases is not yet supported",
-			"The underlying UniFi API client (go-unifi) does not currently expose "+
-				"a field for ipv6.aliases, so the provider cannot send this value to "+
-				"the controller even though the controller accepts and returns it. "+
-				"Remove ipv6.aliases from this configuration (and make sure the "+
-				"ipv6 object is known at plan time) until upstream client support "+
-				"lands (see issue #413).",
-		)
-		return
 	}
 
 	// ip_address_pool inside nat_outbound_ip_addresses: the field is not yet
@@ -1744,18 +1730,19 @@ func (r *networkResource) Update(
 	// the resulting PUT literally — silently wiping settings configured
 	// outside Terraform on every unrelated update. Preserve the controller's
 	// current values instead.
+	current, err := r.client.GetNetwork(ctx, site, network.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Updating network",
+			fmt.Sprintf(
+				"Could not read the network to preserve its unmanaged settings: %s",
+				err,
+			),
+		)
+		return
+	}
+	preserveUnmanagedKeys(network, current)
 	if data.DhcpGuarding.IsNull() || data.DhcpServer.IsNull() {
-		current, err := r.client.GetNetwork(ctx, site, network.ID)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Updating network",
-				fmt.Sprintf(
-					"Could not read the network to preserve its unmanaged DHCP settings: %s",
-					err,
-				),
-			)
-			return
-		}
 		preserveUnmanagedDhcpGuarding(data.DhcpGuarding, network, current)
 
 		relayEnabled := false
@@ -1997,16 +1984,76 @@ func networkIPv6FromAPI(
 	if network.IPV6InterfaceType != nil && *network.IPV6InterfaceType != "" {
 		interfaceType = types.StringPointerValue(network.IPV6InterfaceType)
 	}
+	aliases := types.ListNull(types.StringType)
+	if len(network.IPV6Aliases) > 0 {
+		aliases, d = types.ListValueFrom(ctx, types.StringType, network.IPV6Aliases)
+		diags.Append(d...)
+	}
 	obj, d := types.ObjectValueFrom(ctx, networkIPv6AttrTypes(), networkIPv6Model{
 		InterfaceType:           interfaceType,
 		ClientAddressAssignment: types.StringPointerValue(network.IPV6ClientAddressAssignment),
 		StaticSubnet:            types.StringPointerValue(network.IPV6Subnet),
-		Aliases:                 types.ListNull(types.StringType),
+		Aliases:                 aliases,
+		SettingPreference:       types.StringNull(),
 		RA:                      ra,
 		PD:                      pd,
 	})
 	diags.Append(d...)
 	return obj, diags
+}
+
+// ipv6ManagedLeaves settles the two ipv6 leaves that are managed only when the
+// configuration states them. setting_preference stays null unless previous
+// holds a value, so a network that does not declare it plans no change and an
+// update leaves the controller's value alone. aliases reads back as a known
+// empty list when previous held a list and the controller returned none, so a
+// configured `aliases = []` applies cleanly.
+func ipv6ManagedLeaves(
+	ctx context.Context,
+	api types.Object,
+	previous types.Object,
+	network *unifi.Network,
+) (types.Object, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if previous.IsNull() || previous.IsUnknown() {
+		return api, diags
+	}
+	var prev, out networkIPv6Model
+	diags.Append(previous.As(ctx, &prev, basetypes.ObjectAsOptions{})...)
+	diags.Append(api.As(ctx, &out, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
+		return api, diags
+	}
+	if !prev.SettingPreference.IsNull() {
+		out.SettingPreference = types.StringPointerValue(network.IPV6SettingPreference)
+	}
+	if out.Aliases.IsNull() && !prev.Aliases.IsNull() && !prev.Aliases.IsUnknown() {
+		out.Aliases = types.ListValueMust(types.StringType, []attr.Value{})
+	}
+	obj, d := types.ObjectValueFrom(ctx, networkIPv6AttrTypes(), out)
+	diags.Append(d...)
+	return obj, diags
+}
+
+// preserveUnmanagedKeys carries the keys the controller stores on a network
+// that the resource does not model, or models only when configured, from the
+// network as the controller holds it. The update is a full replace, so a key
+// the request leaves out is deleted.
+func preserveUnmanagedKeys(network, current *unifi.Network) {
+	network.ExternalID = current.ExternalID
+	network.IPV6Enabled = current.IPV6Enabled
+	if network.FirewallZoneID == nil {
+		network.FirewallZoneID = current.FirewallZoneID
+	}
+	if network.IPV6Aliases == nil {
+		network.IPV6Aliases = current.IPV6Aliases
+	}
+	if network.IPV6SettingPreference == nil {
+		network.IPV6SettingPreference = current.IPV6SettingPreference
+	}
+	if network.DHCPDV6AllowSlaac == nil {
+		network.DHCPDV6AllowSlaac = current.DHCPDV6AllowSlaac
+	}
 }
 
 // ipv6ToFramework builds the ipv6 object for the model. Corporate and guest
@@ -2024,8 +2071,11 @@ func (r *networkResource) ipv6ToFramework(
 	vlanOnly bool,
 ) (types.Object, diag.Diagnostics) {
 	api, diags := networkIPv6FromAPI(ctx, network)
-	if !vlanOnly || diags.HasError() {
+	if diags.HasError() {
 		return api, diags
+	}
+	if !vlanOnly {
+		return ipv6ManagedLeaves(ctx, api, previous, network)
 	}
 	if previous.IsNull() || previous.IsUnknown() {
 		var d diag.Diagnostics
@@ -2103,6 +2153,20 @@ func (r *networkResource) modelToNetwork(
 		network.IPV6InterfaceType = v6.InterfaceType.ValueStringPointer()
 		network.IPV6ClientAddressAssignment = optStr(v6.ClientAddressAssignment)
 		network.IPV6Subnet = v6.StaticSubnet.ValueStringPointer()
+		// A null setting_preference stays off the wire, so the controller keeps its value.
+		network.IPV6SettingPreference = optStr(v6.SettingPreference)
+		// A declared alias list replaces the live one. A null list leaves
+		// IPV6Aliases nil, and Update then carries the live list.
+		if !v6.Aliases.IsNull() && !v6.Aliases.IsUnknown() {
+			var aliases []string
+			diags.Append(v6.Aliases.ElementsAs(ctx, &aliases, false)...)
+			if !diags.HasError() {
+				if aliases == nil {
+					aliases = []string{}
+				}
+				network.IPV6Aliases = aliases
+			}
+		}
 		if ra, ok, d := util.ObjectAs[networkIPv6RAModel](ctx, v6.RA); ok {
 			network.IPV6RaEnabled = ra.Enabled.ValueBool()
 			network.IPV6RaPriority = optStr(ra.Priority)
@@ -2437,6 +2501,8 @@ func (r *networkResource) modelToNetwork(
 			network.DHCPDV6Start = dhcpV6Server.Start.ValueStringPointer()
 			network.DHCPDV6Stop = dhcpV6Server.Stop.ValueStringPointer()
 			network.DHCPDV6LeaseTime = dhcpV6Server.Lease.ValueInt64Pointer()
+			// A null allow_slaac stays off the wire, so the controller keeps its value.
+			network.DHCPDV6AllowSlaac = boolPointerIfKnown(dhcpV6Server.AllowSlaac)
 
 			// Handle DHCPv6 DNS. A null or unknown dns object behaves like the
 			// unset flat attributes: auto off, with every server slot cleared.
@@ -2983,12 +3049,26 @@ func (r *networkResource) networkToModel(
 		)
 		diags.Append(d...)
 
+		// allow_slaac is managed only when it is configured: an unset value stays
+		// null, on import too, so a network that does not declare it plans no change.
+		allowSlaac := types.BoolNull()
+		if previousModel != nil && !previousModel.DhcpV6Server.IsNull() &&
+			!previousModel.DhcpV6Server.IsUnknown() {
+			var previous dhcpV6ServerModel
+			diags.Append(
+				previousModel.DhcpV6Server.As(ctx, &previous, basetypes.ObjectAsOptions{})...)
+			if !previous.AllowSlaac.IsNull() {
+				allowSlaac = types.BoolPointerValue(network.DHCPDV6AllowSlaac)
+			}
+		}
+
 		dhcpV6ServerValue := dhcpV6ServerModel{
-			Enabled: types.BoolValue(network.DHCPDV6Enabled),
-			DNS:     dhcpv6DNSObj,
-			Lease:   types.Int64PointerValue(network.DHCPDV6LeaseTime),
-			Start:   types.StringPointerValue(network.DHCPDV6Start),
-			Stop:    types.StringPointerValue(network.DHCPDV6Stop),
+			Enabled:    types.BoolValue(network.DHCPDV6Enabled),
+			DNS:        dhcpv6DNSObj,
+			Lease:      types.Int64PointerValue(network.DHCPDV6LeaseTime),
+			Start:      types.StringPointerValue(network.DHCPDV6Start),
+			Stop:       types.StringPointerValue(network.DHCPDV6Stop),
+			AllowSlaac: allowSlaac,
 		}
 		dhcpV6ServerObj, d := types.ObjectValueFrom(
 			ctx,
