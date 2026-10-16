@@ -168,8 +168,8 @@ func eachModifiedChild(
 			fn(sr.Schema, section, child, a)
 		}
 	}
-	if count != 87 {
-		t.Errorf("found %d section children with useStateUnlessParentNew, want 87", count)
+	if count != 103 {
+		t.Errorf("found %d section children with useStateUnlessParentNew, want 103", count)
 	}
 }
 

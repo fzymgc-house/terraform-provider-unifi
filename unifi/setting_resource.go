@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -249,6 +250,7 @@ type settingResourceModel struct {
 	USG           types.Object   `tfsdk:"usg"`
 	IgmpSnooping  types.Object   `tfsdk:"igmp_snooping"`
 	GlobalSwitch  types.Object   `tfsdk:"global_switch"`
+	RadioAi       types.Object   `tfsdk:"radio_ai"`
 	Timeouts      timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -277,6 +279,29 @@ type settingGlobalSwitchModel struct {
 	LinkDebounce                types.Int64  `tfsdk:"link_debounce"`
 	PoeStagingDelayMsec         types.Int64  `tfsdk:"poe_staging_delay_msec"`
 	SwitchExclusions            types.List   `tfsdk:"switch_exclusions"`
+}
+
+// settingRadioAiModel is the nested radio_ai block: the nightly channel optimizer. The controller
+// replaces the whole section on write, so every field the user leaves unset is read from the
+// controller first and written back as it was, the channel blacklist and the per-radio widths
+// among them, which the block does not expose.
+type settingRadioAiModel struct {
+	Enabled                     types.Bool   `tfsdk:"enabled"`
+	AutoEnabled                 types.Bool   `tfsdk:"auto_enabled"`
+	Default                     types.Bool   `tfsdk:"default"`
+	Optimize                    types.List   `tfsdk:"optimize"`
+	Radios                      types.List   `tfsdk:"radios"`
+	CronExpr                    types.String `tfsdk:"cron_expr"`
+	SettingPreference           types.String `tfsdk:"setting_preference"`
+	AutoChannelPresetsType      types.String `tfsdk:"auto_channel_presets_type"`
+	AutoAdjustChannelsToCountry types.Bool   `tfsdk:"auto_adjust_channels_to_country"`
+	ChannelsNg                  types.List   `tfsdk:"channels_ng"`
+	ChannelsNa                  types.List   `tfsdk:"channels_na"`
+	Channels6E                  types.List   `tfsdk:"channels_6e"`
+	HtModesNg                   types.List   `tfsdk:"ht_modes_ng"`
+	HtModesNa                   types.List   `tfsdk:"ht_modes_na"`
+	ExcludeDevices              types.List   `tfsdk:"exclude_devices"`
+	HighPriorityDevices         types.List   `tfsdk:"high_priority_devices"`
 }
 
 // Shared attribute-type maps for the doh/ips nested objects and lists. These
@@ -416,6 +441,24 @@ var (
 		"link_debounce":                   types.Int64Type,
 		"poe_staging_delay_msec":          types.Int64Type,
 		"switch_exclusions":               types.ListType{ElemType: types.StringType},
+	}
+	radioAiAttrTypes = map[string]attr.Type{
+		"enabled":                         types.BoolType,
+		"auto_enabled":                    types.BoolType,
+		"default":                         types.BoolType,
+		"optimize":                        types.ListType{ElemType: types.StringType},
+		"radios":                          types.ListType{ElemType: types.StringType},
+		"cron_expr":                       types.StringType,
+		"setting_preference":              types.StringType,
+		"auto_channel_presets_type":       types.StringType,
+		"auto_adjust_channels_to_country": types.BoolType,
+		"channels_ng":                     types.ListType{ElemType: types.Int64Type},
+		"channels_na":                     types.ListType{ElemType: types.Int64Type},
+		"channels_6e":                     types.ListType{ElemType: types.Int64Type},
+		"ht_modes_ng":                     types.ListType{ElemType: types.Int64Type},
+		"ht_modes_na":                     types.ListType{ElemType: types.Int64Type},
+		"exclude_devices":                 types.ListType{ElemType: types.StringType},
+		"high_priority_devices":           types.ListType{ElemType: types.StringType},
 	}
 )
 
@@ -1532,6 +1575,172 @@ func (r *settingResource) Schema(
 					},
 				},
 			},
+			"radio_ai": schema.SingleNestedAttribute{
+				MarkdownDescription: "The nightly channel optimizer (the `radio_ai` setting). With `enabled` on, the " +
+					"controller runs on `cron_expr` and rewrites the channel, and with `power` in `optimize` the " +
+					"transmit power, of every radio it is allowed to touch, which undoes a channel that a " +
+					"`unifi_device` states. The controller replaces the whole section on write, so the provider " +
+					"reads it first and writes every unset field back as it was, the channel blacklist and the " +
+					"per-radio widths included. Fields left unset keep the controller's current value across updates.",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
+				Attributes: map[string]schema.Attribute{
+					"enabled": schema.BoolAttribute{
+						MarkdownDescription: "Whether the nightly optimizer runs.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							useStateUnlessParentNew(),
+						},
+					},
+					"auto_enabled": schema.BoolAttribute{
+						MarkdownDescription: "A second toggle that Network 10.6 stores beside `enabled`. State it as the controller holds it.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							useStateUnlessParentNew(),
+						},
+					},
+					"default": schema.BoolAttribute{
+						MarkdownDescription: "Whether the section still holds the controller defaults.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							useStateUnlessParentNew(),
+						},
+					},
+					"optimize": schema.ListAttribute{
+						MarkdownDescription: "What the optimizer changes. Values: `channel`, `power`.",
+						ElementType:         types.StringType,
+						Optional:            true,
+						Computed:            true,
+						Validators: []validator.List{
+							listvalidator.ValueStringsAre(
+								stringvalidator.OneOf("channel", "power"),
+							),
+						},
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"radios": schema.ListAttribute{
+						MarkdownDescription: "The radios it touches. Values: `ng`, `na`, `6e`.",
+						ElementType:         types.StringType,
+						Optional:            true,
+						Computed:            true,
+						Validators: []validator.List{
+							listvalidator.ValueStringsAre(
+								stringvalidator.OneOf("ng", "na", "6e"),
+							),
+						},
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"cron_expr": schema.StringAttribute{
+						MarkdownDescription: "When it runs, as a cron expression in the time zone of the site, for example `0 3 * * *`.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							useStateUnlessParentNew(),
+						},
+					},
+					"setting_preference": schema.StringAttribute{
+						MarkdownDescription: "Whether the controller manages the section (`auto`) or the values below are set by hand (`manual`).",
+						Optional:            true,
+						Computed:            true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("auto", "manual"),
+						},
+						PlanModifiers: []planmodifier.String{
+							useStateUnlessParentNew(),
+						},
+					},
+					"auto_channel_presets_type": schema.StringAttribute{
+						MarkdownDescription: "The channel preset. One of `maximum_speed`, `conservative`, `custom`.",
+						Optional:            true,
+						Computed:            true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("maximum_speed", "conservative", "custom"),
+						},
+						PlanModifiers: []planmodifier.String{
+							useStateUnlessParentNew(),
+						},
+					},
+					"auto_adjust_channels_to_country": schema.BoolAttribute{
+						MarkdownDescription: "Whether the channel lists are limited to the regulatory domain of the site.",
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.Bool{
+							useStateUnlessParentNew(),
+						},
+					},
+					"channels_ng": schema.ListAttribute{
+						MarkdownDescription: "The 2.4 GHz channels the optimizer can pick from.",
+						ElementType:         types.Int64Type,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"channels_na": schema.ListAttribute{
+						MarkdownDescription: "The 5 GHz channels the optimizer can pick from.",
+						ElementType:         types.Int64Type,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"channels_6e": schema.ListAttribute{
+						MarkdownDescription: "The 6 GHz channels the optimizer can pick from.",
+						ElementType:         types.Int64Type,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"ht_modes_ng": schema.ListAttribute{
+						MarkdownDescription: "The 2.4 GHz channel widths the optimizer can pick from, in MHz.",
+						ElementType:         types.Int64Type,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"ht_modes_na": schema.ListAttribute{
+						MarkdownDescription: "The 5 GHz channel widths the optimizer can pick from, in MHz.",
+						ElementType:         types.Int64Type,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"exclude_devices": schema.ListAttribute{
+						MarkdownDescription: "MAC addresses of the access points the optimizer leaves alone.",
+						ElementType:         types.StringType,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+					"high_priority_devices": schema.ListAttribute{
+						MarkdownDescription: "MAC addresses of the access points the optimizer serves first.",
+						ElementType:         types.StringType,
+						Optional:            true,
+						Computed:            true,
+						PlanModifiers: []planmodifier.List{
+							useStateUnlessParentNew(),
+						},
+					},
+				},
+			},
 			"global_switch": schema.SingleNestedAttribute{
 				MarkdownDescription: "Site-wide switch settings (the `global_switch` setting). `dhcp_snoop` is the switch-wide DHCP snooping toggle that DHCP Guard on a network depends on. Fields left unset keep the controller's current value across updates.",
 				Optional:            true,
@@ -1983,6 +2192,13 @@ func (r *settingResource) Create(
 		}
 	}
 
+	if !data.RadioAi.IsNull() && !data.RadioAi.IsUnknown() {
+		r.writeRadioAi(ctx, site, data.RadioAi, "Creating", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	// Read back the settings
 	r.readSettings(ctx, site, &data, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -2320,6 +2536,13 @@ func (r *settingResource) Update(
 
 	if !plan.GlobalSwitch.IsNull() && !plan.GlobalSwitch.IsUnknown() {
 		r.writeGlobalSwitch(ctx, site, plan.GlobalSwitch, "Updating", &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	if !plan.RadioAi.IsNull() && !plan.RadioAi.IsUnknown() {
+		r.writeRadioAi(ctx, site, plan.RadioAi, "Updating", &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -2927,6 +3150,24 @@ func (r *settingResource) readSettings(
 		data.GlobalSwitch = objValue
 	} else {
 		data.GlobalSwitch = types.ObjectNull(globalSwitchAttrTypes)
+	}
+
+	// Nightly channel optimizer (site-level)
+	if readSection("radio_ai", data.RadioAi) {
+		_, raSetting, err := ui.GetSetting[*settings.RadioAi](r.client.ApiClient, ctx, site)
+		if err != nil {
+			diags.AddError("Error Reading Radio AI Setting", err.Error())
+			return
+		}
+		raModel := r.radioAiSettingToModel(ctx, raSetting, diags)
+		objValue, d := types.ObjectValueFrom(ctx, radioAiAttrTypes, raModel)
+		diags.Append(d...)
+		if diags.HasError() {
+			return
+		}
+		data.RadioAi = objValue
+	} else {
+		data.RadioAi = types.ObjectNull(radioAiAttrTypes)
 	}
 }
 
@@ -3780,6 +4021,153 @@ func (r *settingResource) globalSwitchSettingToModel(
 	diags.Append(d...)
 	model.SwitchExclusions = macs
 	return model
+}
+
+// Radio AI conversion functions.
+
+// writeRadioAi reads the current radio_ai section, overlays the user-set fields and writes the
+// section back. set/setting/radio_ai replaces the whole section, so the read first is what
+// keeps every unset field, the channel blacklist and the per-radio widths among them.
+func (r *settingResource) writeRadioAi(
+	ctx context.Context,
+	site string,
+	obj types.Object,
+	verb string,
+	diags *diag.Diagnostics,
+) {
+	var model settingRadioAiModel
+	diags.Append(obj.As(ctx, &model, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
+		return
+	}
+	_, current, err := ui.GetSetting[*settings.RadioAi](r.client.ApiClient, ctx, site)
+	if err != nil {
+		var notFound *ui.NotFoundError
+		if !errors.As(err, &notFound) {
+			diags.AddError("Error Reading Radio AI Setting", err.Error())
+			return
+		}
+		current = &settings.RadioAi{}
+	}
+	setting := r.radioAiModelToSetting(ctx, &model, current, diags)
+	if diags.HasError() {
+		return
+	}
+	if err := r.client.UpdateSetting(ctx, site, setting); err != nil {
+		diags.AddError("Error "+verb+" Radio AI Setting", err.Error())
+	}
+}
+
+// radioAiModelToSetting overlays the user-set fields onto the current remote setting (base) so
+// every other field keeps its remote value across the write.
+func (r *settingResource) radioAiModelToSetting(
+	ctx context.Context,
+	model *settingRadioAiModel,
+	base *settings.RadioAi,
+	diags *diag.Diagnostics,
+) *settings.RadioAi {
+	setting := base
+	known := func(v attr.Value) bool { return !v.IsNull() && !v.IsUnknown() }
+	strings := func(l types.List) []string {
+		var out []string
+		diags.Append(l.ElementsAs(ctx, &out, false)...)
+		return out
+	}
+	ints := func(l types.List) []int64 {
+		var out []int64
+		diags.Append(l.ElementsAs(ctx, &out, false)...)
+		return out
+	}
+	if known(model.Enabled) {
+		setting.Enabled = model.Enabled.ValueBool()
+	}
+	if known(model.AutoEnabled) {
+		setting.AutoEnabled = model.AutoEnabled.ValueBool()
+	}
+	if known(model.Default) {
+		setting.Default = model.Default.ValueBool()
+	}
+	if known(model.Optimize) {
+		setting.Optimize = strings(model.Optimize)
+	}
+	if known(model.Radios) {
+		setting.Radios = strings(model.Radios)
+	}
+	if known(model.CronExpr) {
+		setting.CronExpr = model.CronExpr.ValueString()
+	}
+	if known(model.SettingPreference) {
+		setting.SettingPreference = model.SettingPreference.ValueString()
+	}
+	if known(model.AutoChannelPresetsType) {
+		setting.AutoChannelPresetsType = model.AutoChannelPresetsType.ValueString()
+	}
+	if known(model.AutoAdjustChannelsToCountry) {
+		setting.AutoAdjustChannelsToCountry = model.AutoAdjustChannelsToCountry.ValueBool()
+	}
+	if known(model.ChannelsNg) {
+		setting.ChannelsNg = ints(model.ChannelsNg)
+	}
+	if known(model.ChannelsNa) {
+		setting.ChannelsNa = ints(model.ChannelsNa)
+	}
+	if known(model.Channels6E) {
+		setting.Channels6E = ints(model.Channels6E)
+	}
+	if known(model.HtModesNg) {
+		setting.HtModesNg = ints(model.HtModesNg)
+	}
+	if known(model.HtModesNa) {
+		setting.HtModesNa = ints(model.HtModesNa)
+	}
+	if known(model.ExcludeDevices) {
+		setting.ExcludeDevices = strings(model.ExcludeDevices)
+	}
+	if known(model.HighPriorityDevices) {
+		setting.HighPriorityDevices = strings(model.HighPriorityDevices)
+	}
+	return setting
+}
+
+func (r *settingResource) radioAiSettingToModel(
+	ctx context.Context,
+	setting *settings.RadioAi,
+	diags *diag.Diagnostics,
+) *settingRadioAiModel {
+	strings := func(v []string) types.List {
+		if v == nil {
+			v = []string{}
+		}
+		l, d := types.ListValueFrom(ctx, types.StringType, v)
+		diags.Append(d...)
+		return l
+	}
+	ints := func(v []int64) types.List {
+		if v == nil {
+			v = []int64{}
+		}
+		l, d := types.ListValueFrom(ctx, types.Int64Type, v)
+		diags.Append(d...)
+		return l
+	}
+	return &settingRadioAiModel{
+		Enabled:                     types.BoolValue(setting.Enabled),
+		AutoEnabled:                 types.BoolValue(setting.AutoEnabled),
+		Default:                     types.BoolValue(setting.Default),
+		Optimize:                    strings(setting.Optimize),
+		Radios:                      strings(setting.Radios),
+		CronExpr:                    types.StringValue(setting.CronExpr),
+		SettingPreference:           types.StringValue(setting.SettingPreference),
+		AutoChannelPresetsType:      types.StringValue(setting.AutoChannelPresetsType),
+		AutoAdjustChannelsToCountry: types.BoolValue(setting.AutoAdjustChannelsToCountry),
+		ChannelsNg:                  ints(setting.ChannelsNg),
+		ChannelsNa:                  ints(setting.ChannelsNa),
+		Channels6E:                  ints(setting.Channels6E),
+		HtModesNg:                   ints(setting.HtModesNg),
+		HtModesNa:                   ints(setting.HtModesNa),
+		ExcludeDevices:              strings(setting.ExcludeDevices),
+		HighPriorityDevices:         strings(setting.HighPriorityDevices),
+	}
 }
 
 // DoH conversion functions.
