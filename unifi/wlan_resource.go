@@ -680,9 +680,13 @@ func (r *wlanFrameworkResource) Schema(
 						MarkdownDescription: "MAC address filter policy (only valid if `enabled` is `true`). " +
 							"Unset, the controller keeps its own value. A default here would plan " +
 							"a change on every WLAN the UI created, because the framework applies " +
-							"a nested default even when `mac_filter` is absent from the config.",
+							"a nested default even when `mac_filter` is absent from the config. " +
+							"A create that enables the filter without a policy uses `deny`.",
 						Optional: true,
 						Computed: true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 						Validators: []validator.String{
 							stringvalidator.OneOf("allow", "deny"),
 						},
@@ -2144,7 +2148,14 @@ func (r *wlanFrameworkResource) planOntoWLAN(
 		}
 
 		wlan.MACFilterEnabled = macFilter.Enabled.ValueBool()
-		wlan.MACFilterPolicy = macFilter.Policy.ValueString()
+		// A stated policy is sent. Unset, an update keeps the live policy, and a create
+		// that turns the filter on without one starts from deny, the closed default.
+		switch {
+		case !macFilter.Policy.IsNull() && !macFilter.Policy.IsUnknown():
+			wlan.MACFilterPolicy = macFilter.Policy.ValueString()
+		case base == nil && macFilter.Enabled.ValueBool():
+			wlan.MACFilterPolicy = "deny"
+		}
 
 		if !macFilter.List.IsNull() && !macFilter.List.IsUnknown() {
 			wlan.MACFilterList = nil
