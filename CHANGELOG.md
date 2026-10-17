@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.3] - fzymgc-house fork
+
+Two more plan-stability fixes from the first live plan. Both remove an update that changed
+nothing on the controller.
+
+### 🐛 Bug Fixes
+
+- **`unifi_setting`: the leaves of `auto_speedtest`, `dpi`, `lcm` and `network_optimization`
+  carry no static default.** The framework applies a leaf default even when the configuration
+  leaves the section out, and a value that differs from the controller's trips its plan-change
+  gate. Every computed attribute without `UseStateForUnknown` (`mgmt.ssh`, `radius`, `usg`,
+  `syslog.ip`, the netconsole host and port) was then planned as unknown on every run. The leaves
+  now read from the controller, the way the rest of each section does.
+- **`unifi_device`: the deprecated `assisted_roaming_enabled` and `assisted_roaming_rssi` keep
+  their state.** Upstream made them optional only, so a radio table adopted before the
+  deprecation planned `false -> null` on every run and re-planned every computed radio field as
+  unknown. They are computed with `UseStateForUnknown` again until they are removed.
+
 ## [v0.60.0-fzymgc.2] - fzymgc-house fork
 
 Two fixes that the first plan of a live site against v0.60.0-fzymgc.1 surfaced.
