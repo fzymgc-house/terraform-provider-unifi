@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.2] - fzymgc-house fork
+
+Two fixes that the first plan of a live site against v0.60.0-fzymgc.1 surfaced.
+
+### 🐛 Bug Fixes
+
+- **`unifi_network`: `ipv6.setting_preference` reads back from the controller.** Read, Create and
+  Update passed a null prior ipv6 object for corporate and guest networks, so the leaf read as null
+  and every refresh reported the configured value as drift.
+- **`unifi_port_profile`: the plan-time refusal of `forward = "customize"` on an untagged native
+  network skips a profile that states its tagged VLANs.** With `tagged_vlan_mgmt = "custom"` and a
+  tagged or an excluded network list, the controller stores `customize` for an untagged native
+  network (upstream #496 measured `tagged_vlan_mgmt = "auto"`). A `custom` profile that leaves no
+  tagged network still collapses to `block_all` on the controller, and the apply reports that.
+
 ## [v0.60.0-fzymgc.1] - fzymgc-house fork
 
 This release moves the fzymgc-house fork from its 2026-08 base onto upstream `main`

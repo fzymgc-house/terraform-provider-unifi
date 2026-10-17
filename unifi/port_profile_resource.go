@@ -359,11 +359,12 @@ func (r *portProfileResource) Schema(
 			},
 			"forward": schema.StringAttribute{
 				Description: "The type forwarding to use for the port profile. Can be " +
-					"`all`, `native`, `customize` or `disabled`. `customize` requires a " +
-					"native network that carries a VLAN id: the controller silently " +
-					"stores `all` for a profile whose native network is untagged, which " +
-					"the provider rejects at plan time rather than letting the apply " +
-					"leave the resource tainted.",
+					"`all`, `native`, `customize` or `disabled`. With `tagged_vlan_mgmt` " +
+					"other than `custom`, `customize` requires a native network that " +
+					"carries a VLAN id: the controller silently stores `all` for a " +
+					"profile whose native network is untagged, which the provider " +
+					"rejects at plan time rather than letting the apply leave the " +
+					"resource tainted.",
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("all"),
@@ -965,6 +966,14 @@ func (r *portProfileResource) ImportState(
 // operator act. Adopting the controller's value instead would hide a silent
 // divergence between configuration and state, and retrying cannot help: the
 // controller is not going to change its mind.
+//
+// The rewrite happens only while the controller derives the tagged VLANs
+// itself. With tagged_vlan_mgmt = "custom" and a tagged or an excluded network
+// list, the controller stores "customize" for an untagged native network, and
+// for no native network at all (Network 10.6.106), so the check skips such a
+// profile. A "custom" profile with neither list, or one whose lists leave no
+// tagged network, collapses to block_all/native on the controller. The apply
+// then reports the rewrite of tagged_vlan_mgmt as an inconsistent result.
 func (r *portProfileResource) ModifyPlan(
 	ctx context.Context,
 	req resource.ModifyPlanRequest,
@@ -977,16 +986,26 @@ func (r *portProfileResource) ModifyPlan(
 		return // not configured yet (e.g. during validation)
 	}
 
-	var forward, nativeID, site types.String
+	var forward, nativeID, site, taggedVLANMgmt types.String
+	var taggedIDs, excludedIDs types.Set
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("forward"), &forward)...)
 	resp.Diagnostics.Append(
 		req.Plan.GetAttribute(ctx, path.Root("native_networkconf_id"), &nativeID)...)
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("site"), &site)...)
+	resp.Diagnostics.Append(
+		req.Plan.GetAttribute(ctx, path.Root("tagged_vlan_mgmt"), &taggedVLANMgmt)...)
+	resp.Diagnostics.Append(
+		req.Plan.GetAttribute(ctx, path.Root("tagged_networkconf_ids"), &taggedIDs)...)
+	resp.Diagnostics.Append(
+		req.Plan.GetAttribute(ctx, path.Root("excluded_networkconf_ids"), &excludedIDs)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	if forward.IsNull() || forward.IsUnknown() || forward.ValueString() != "customize" {
+		return
+	}
+	if customTaggedVLANs(taggedVLANMgmt, taggedIDs, excludedIDs) {
 		return
 	}
 	// An unknown native network is resolved at apply time to the site default,
@@ -1025,6 +1044,20 @@ func (r *portProfileResource) ModifyPlan(
 			networkName(network),
 		),
 	)
+}
+
+// customTaggedVLANs reports whether the plan states the tagged VLANs itself:
+// tagged_vlan_mgmt = "custom" with a tagged or an excluded network list. A list
+// that is unknown at plan time counts, because it resolves at apply time.
+func customTaggedVLANs(mgmt types.String, tagged, excluded types.Set) bool {
+	if mgmt.IsNull() || mgmt.IsUnknown() || mgmt.ValueString() != "custom" {
+		return false
+	}
+	return setMayHaveElements(tagged) || setMayHaveElements(excluded)
+}
+
+func setMayHaveElements(s types.Set) bool {
+	return s.IsUnknown() || (!s.IsNull() && len(s.Elements()) > 0)
 }
 
 // networkName returns a network's name for diagnostics, falling back to its ID.

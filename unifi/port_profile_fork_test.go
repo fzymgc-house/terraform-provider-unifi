@@ -7,6 +7,7 @@ import (
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/ubiquiti-community/go-unifi/unifi"
 )
 
@@ -77,4 +78,56 @@ func Test_portProfileResource_portProfileToModel_absentDot1xIdleTimeoutIsNull(t 
 	if stored.IdleTimeout.ValueString() != "5m0s" {
 		t.Errorf("IdleTimeout = %q, want 5m0s", stored.IdleTimeout.ValueString())
 	}
+}
+
+// The controller keeps forward = "customize" on a profile with tagged_vlan_mgmt = "custom" whose
+// native network has no VLAN id and a tagged or an excluded network list, so the plan-time
+// refusal for an untagged native network (#496)
+// applies only while the controller manages the tagged VLANs itself.
+func TestAccPortProfileFork_customizeOnUntaggedNativeWithCustomTaggedVLANs(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { preCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+data "unifi_network" "default" {
+	name = "Default"
+}
+
+# One tagged network stays allowed and one is excluded. A custom profile that
+# excludes every tagged network collapses to block_all on the controller.
+resource "unifi_network" "kept" {
+	name    = "tfacc-customize-kept"
+	purpose = "corporate"
+	subnet  = "10.213.0.1/24"
+	vlan    = 213
+}
+
+resource "unifi_network" "excluded" {
+	name    = "tfacc-customize-excluded"
+	purpose = "corporate"
+	subnet  = "10.212.0.1/24"
+	vlan    = 212
+}
+
+resource "unifi_port_profile" "test" {
+	name                     = "tfacc-customize-untagged-native"
+	native_networkconf_id    = data.unifi_network.default.id
+	tagged_vlan_mgmt         = "custom"
+	excluded_networkconf_ids = [unifi_network.excluded.id]
+	forward                  = "customize"
+
+	depends_on = [unifi_network.kept]
+}
+`,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						"unifi_port_profile.test", "forward", "customize"),
+					resource.TestCheckResourceAttr(
+						"unifi_port_profile.test", "tagged_vlan_mgmt", "custom"),
+				),
+			},
+		},
+	})
 }
