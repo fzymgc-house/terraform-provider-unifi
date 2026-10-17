@@ -166,3 +166,59 @@ func Test_ipv6ManagedLeaves(t *testing.T) {
 		t.Errorf("a null prior model must leave the API shape alone")
 	}
 }
+
+// Read passes the prior state into networkToModel. For a corporate network the managed ipv6
+// leaf setting_preference must survive that call, or every refresh reports the configured
+// value as drift to null.
+func Test_networkResource_networkToModel_keepsIPv6SettingPreference(t *testing.T) {
+	ctx := context.Background()
+	pref := "manual"
+	name := "Core"
+	network := &unifi.Network{
+		ID:                    "net-1",
+		Name:                  &name,
+		Purpose:               unifi.PurposeCorporate,
+		IPV6SettingPreference: &pref,
+	}
+	prior := &networkResourceModel{
+		IPv6: types.ObjectValueMust(networkIPv6AttrTypes(), map[string]attr.Value{
+			"interface_type":            types.StringValue("pd"),
+			"client_address_assignment": types.StringNull(),
+			"static_subnet":             types.StringNull(),
+			"aliases":                   types.ListNull(types.StringType),
+			"setting_preference":        types.StringValue("manual"),
+			"ra":                        types.ObjectNull(networkIPv6RAAttrTypes()),
+			"pd":                        types.ObjectNull(networkIPv6PDAttrTypes()),
+		}),
+	}
+
+	r := &networkResource{}
+	var model networkResourceModel
+	if diags := r.networkToModel(ctx, network, &model, "default", prior); diags.HasError() {
+		t.Fatalf("networkToModel: %v", diags)
+	}
+	var v6 networkIPv6Model
+	if d := model.IPv6.As(ctx, &v6, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decode: %v", d)
+	}
+	if v6.SettingPreference.ValueString() != "manual" {
+		t.Errorf(
+			"ipv6.setting_preference = %v, want manual carried from the prior state",
+			v6.SettingPreference,
+		)
+	}
+
+	var fresh networkResourceModel
+	if diags := r.networkToModel(ctx, network, &fresh, "default", nil); diags.HasError() {
+		t.Fatalf("networkToModel without prior: %v", diags)
+	}
+	if d := fresh.IPv6.As(ctx, &v6, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decode: %v", d)
+	}
+	if !v6.SettingPreference.IsNull() {
+		t.Errorf(
+			"ipv6.setting_preference = %v, want null when nothing states it",
+			v6.SettingPreference,
+		)
+	}
+}

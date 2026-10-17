@@ -692,7 +692,6 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Whether periodic automated speed tests are enabled.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(false),
 					},
 					"cron_expr": schema.StringAttribute{
 						MarkdownDescription: "Cron expression controlling when the speed test runs (e.g. `0 * * * *`).",
@@ -710,8 +709,10 @@ func (r *settingResource) Schema(
 				},
 				Attributes: map[string]schema.Attribute{
 					"code": schema.Int64Attribute{
-						MarkdownDescription: "Regulatory country code (ISO 3166-1 numeric).",
-						Required:            true,
+						MarkdownDescription: "Regulatory country code (ISO 3166-1 numeric). Read from " +
+							"the controller when the configuration leaves it out.",
+						Optional: true,
+						Computed: true,
 					},
 				},
 			},
@@ -727,13 +728,11 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Whether DPI is enabled.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(false),
 					},
 					"fingerprinting_enabled": schema.BoolAttribute{
 						MarkdownDescription: "Whether device fingerprinting is enabled.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(false),
 					},
 				},
 			},
@@ -749,7 +748,6 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Whether the device display is enabled.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(true),
 					},
 					"brightness": schema.Int64Attribute{
 						MarkdownDescription: "Display brightness (1-100).",
@@ -767,13 +765,11 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Sync display settings across devices.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(false),
 					},
 					"touch_event": schema.BoolAttribute{
 						MarkdownDescription: "Whether touch events on the display are enabled.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(true),
 					},
 				},
 			},
@@ -789,7 +785,6 @@ func (r *settingResource) Schema(
 						MarkdownDescription: "Whether automated network optimization is enabled.",
 						Optional:            true,
 						Computed:            true,
-						Default:             booldefault.StaticBool(false),
 					},
 				},
 			},
@@ -980,11 +975,13 @@ func (r *settingResource) Schema(
 								},
 								"sdns_stamp": schema.StringAttribute{
 									MarkdownDescription: "DNS stamp (sdns://) for the custom resolver.",
-									Required:            true,
+									Optional:            true,
+									Computed:            true,
 								},
 								"server_name": schema.StringAttribute{
 									MarkdownDescription: "Human-readable name for this custom server.",
-									Required:            true,
+									Optional:            true,
+									Computed:            true,
 								},
 							},
 						},
@@ -1038,15 +1035,18 @@ func (r *settingResource) Schema(
 							Attributes: map[string]schema.Attribute{
 								"ip_address": schema.StringAttribute{
 									MarkdownDescription: "IP address to use as a honeypot.",
-									Required:            true,
+									Optional:            true,
+									Computed:            true,
 								},
 								"network_id": schema.StringAttribute{
 									MarkdownDescription: "Network ID this honeypot IP belongs to.",
-									Required:            true,
+									Optional:            true,
+									Computed:            true,
 								},
 								"version": schema.StringAttribute{
 									MarkdownDescription: "IP version: v4 or v6.",
-									Required:            true,
+									Optional:            true,
+									Computed:            true,
 									Validators: []validator.String{
 										stringvalidator.OneOf("v4", "v6"),
 									},
@@ -1124,7 +1124,8 @@ func (r *settingResource) Schema(
 												Attributes: map[string]schema.Attribute{
 													"direction": schema.StringAttribute{
 														MarkdownDescription: "Match direction: both, src, or dest.",
-														Required:            true,
+														Optional:            true,
+														Computed:            true,
 														Validators: []validator.String{
 															stringvalidator.OneOf(
 																"both",
@@ -1135,7 +1136,8 @@ func (r *settingResource) Schema(
 													},
 													"mode": schema.StringAttribute{
 														MarkdownDescription: "Match mode: ip, subnet, or network.",
-														Required:            true,
+														Optional:            true,
+														Computed:            true,
 														Validators: []validator.String{
 															stringvalidator.OneOf(
 																"ip",
@@ -1146,7 +1148,8 @@ func (r *settingResource) Schema(
 													},
 													"value": schema.StringAttribute{
 														MarkdownDescription: "IP address, CIDR subnet, or network ID to match.",
-														Required:            true,
+														Optional:            true,
+														Computed:            true,
 													},
 												},
 											},
@@ -1162,21 +1165,24 @@ func (r *settingResource) Schema(
 									Attributes: map[string]schema.Attribute{
 										"direction": schema.StringAttribute{
 											MarkdownDescription: "Match direction: both, src, or dest.",
-											Required:            true,
+											Optional:            true,
+											Computed:            true,
 											Validators: []validator.String{
 												stringvalidator.OneOf("both", "src", "dest"),
 											},
 										},
 										"mode": schema.StringAttribute{
 											MarkdownDescription: "Match mode: ip, subnet, or network.",
-											Required:            true,
+											Optional:            true,
+											Computed:            true,
 											Validators: []validator.String{
 												stringvalidator.OneOf("ip", "subnet", "network"),
 											},
 										},
 										"value": schema.StringAttribute{
 											MarkdownDescription: "IP address, CIDR subnet, or network ID to whitelist.",
-											Required:            true,
+											Optional:            true,
+											Computed:            true,
 										},
 									},
 								},
@@ -1272,11 +1278,13 @@ func (r *settingResource) Schema(
 									Attributes: map[string]schema.Attribute{
 										"name": schema.StringAttribute{
 											MarkdownDescription: "Name of SSH key.",
-											Required:            true,
+											Optional:            true,
+											Computed:            true,
 										},
 										"type": schema.StringAttribute{
 											MarkdownDescription: "Type of SSH key, e.g. ssh-rsa.",
-											Required:            true,
+											Optional:            true,
+											Computed:            true,
 										},
 										"key": schema.StringAttribute{
 											MarkdownDescription: "Public SSH key.",

@@ -18,6 +18,9 @@ permissions:
 
 jobs:
   goreleaser:
+    # The fork releases from a local goreleaser run with .goreleaser.fzymgc.yml and the
+    # signing key in Vault. This job needs the GPG secrets of the upstream repository.
+    if: github.repository == 'ubiquiti-community/terraform-provider-unifi'
     runs-on: ubuntu-latest
     concurrency: release
     steps:

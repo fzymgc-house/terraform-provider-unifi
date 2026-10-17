@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.4] - fzymgc-house fork
+
+### 🐛 Bug Fixes
+
+- **`unifi_setting`: every leaf below a computed nested object is computed.** Terraform core keeps
+  the prior value of an optional and computed object that the configuration leaves out, unless the
+  prior object holds a non-null leaf that the schema does not mark computed. Core then infers that
+  the configuration must have set the object before and plans it from the configuration, which is
+  null. `country.code` was `Required`, and every controller fills it, so the plan-change gate of
+  the framework tripped on every run and the resource planned an update with nothing to change.
+  `country.code`, the `ips.honeypot` leaves, the `ips.suppression` list leaves, the
+  `mgmt.ssh.keys` leaves and the `doh.custom_servers` leaves are optional and computed. A leaf the
+  configuration leaves out reads from the controller.
+
+## [v0.60.0-fzymgc.3] - fzymgc-house fork
+
+Two more plan-stability fixes from the first live plan. Both remove an update that changed
+nothing on the controller.
+
+### 🐛 Bug Fixes
+
+- **`unifi_setting`: the leaves of `auto_speedtest`, `dpi`, `lcm` and `network_optimization`
+  carry no static default.** The framework applies a leaf default even when the configuration
+  leaves the section out, and a value that differs from the controller's trips its plan-change
+  gate. Every computed attribute without `UseStateForUnknown` (`mgmt.ssh`, `radius`, `usg`,
+  `syslog.ip`, the netconsole host and port) was then planned as unknown on every run. The leaves
+  now read from the controller, the way the rest of each section does.
+- **`unifi_device`: the deprecated `assisted_roaming_enabled` and `assisted_roaming_rssi` keep
+  their state.** Upstream made them optional only, so a radio table adopted before the
+  deprecation planned `false -> null` on every run and re-planned every computed radio field as
+  unknown. They are computed with `UseStateForUnknown` again until they are removed.
+
+## [v0.60.0-fzymgc.2] - fzymgc-house fork
+
+Two fixes that the first plan of a live site against v0.60.0-fzymgc.1 surfaced.
+
+### 🐛 Bug Fixes
+
+- **`unifi_network`: `ipv6.setting_preference` reads back from the controller.** Read, Create and
+  Update passed a null prior ipv6 object for corporate and guest networks, so the leaf read as null
+  and every refresh reported the configured value as drift.
+- **`unifi_port_profile`: the plan-time refusal of `forward = "customize"` on an untagged native
+  network skips a profile that states its tagged VLANs.** With `tagged_vlan_mgmt = "custom"` and a
+  tagged or an excluded network list, the controller stores `customize` for an untagged native
+  network (upstream #496 measured `tagged_vlan_mgmt = "auto"`). A `custom` profile that leaves no
+  tagged network still collapses to `block_all` on the controller, and the apply reports that.
+
 ## [v0.60.0-fzymgc.1] - fzymgc-house fork
 
 This release moves the fzymgc-house fork from its 2026-08 base onto upstream `main`
