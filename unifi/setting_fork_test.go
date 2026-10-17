@@ -57,3 +57,40 @@ func Test_settingResource_controllerReadSectionsHaveNoLeafDefaults(t *testing.T)
 		}
 	}
 }
+
+// Terraform core keeps the prior value of an optional and computed nested object that the
+// configuration leaves out, unless the prior object holds a non-null leaf that the schema does
+// not mark computed. Core then infers that the configuration must have set the object before
+// and plans it from the configuration, which is null, so the plan-change gate trips on every run
+// for a site whose controller fills such a leaf (`country.code` on every site). Every leaf below
+// a computed nested object is therefore computed too.
+func Test_settingResource_leavesUnderComputedObjectsAreComputed(t *testing.T) {
+	r := &settingResource{}
+	resp := &fwresource.SchemaResponse{}
+	r.Schema(context.Background(), fwresource.SchemaRequest{}, resp)
+	var walk func(prefix string, attrs map[string]schema.Attribute, underComputed bool)
+	walk = func(prefix string, attrs map[string]schema.Attribute, underComputed bool) {
+		for name, a := range attrs {
+			p := prefix + name
+			// The controller never returns the SSH password, so Read leaves the
+			// leaf null and the inference of core cannot fire on it.
+			if p == "mgmt.ssh.password" {
+				continue
+			}
+			if underComputed && !a.IsComputed() {
+				t.Errorf("%s is not computed under a computed object", p)
+			}
+			switch n := a.(type) {
+			case schema.SingleNestedAttribute:
+				walk(p+".", n.Attributes, underComputed || n.IsComputed())
+			case schema.ListNestedAttribute:
+				walk(p+".", n.NestedObject.Attributes, underComputed || n.IsComputed())
+			case schema.SetNestedAttribute:
+				walk(p+".", n.NestedObject.Attributes, underComputed || n.IsComputed())
+			case schema.MapNestedAttribute:
+				walk(p+".", n.NestedObject.Attributes, underComputed || n.IsComputed())
+			}
+		}
+	}
+	walk("", resp.Schema.Attributes, false)
+}

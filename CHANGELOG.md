@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.4] - fzymgc-house fork
+
+### 🐛 Bug Fixes
+
+- **`unifi_setting`: every leaf below a computed nested object is computed.** Terraform core keeps
+  the prior value of an optional and computed object that the configuration leaves out, unless the
+  prior object holds a non-null leaf that the schema does not mark computed. Core then infers that
+  the configuration must have set the object before and plans it from the configuration, which is
+  null. `country.code` was `Required`, and every controller fills it, so the plan-change gate of
+  the framework tripped on every run and the resource planned an update with nothing to change.
+  `country.code`, the `ips.honeypot` leaves, the `ips.suppression` list leaves, the
+  `mgmt.ssh.keys` leaves and the `doh.custom_servers` leaves are optional and computed. A leaf the
+  configuration leaves out reads from the controller.
+
 ## [v0.60.0-fzymgc.3] - fzymgc-house fork
 
 Two more plan-stability fixes from the first live plan. Both remove an update that changed

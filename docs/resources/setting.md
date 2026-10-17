@@ -174,9 +174,9 @@ Optional:
 <a id="nestedatt--country"></a>
 ### Nested Schema for `country`
 
-Required:
+Optional:
 
-- `code` (Number) Regulatory country code (ISO 3166-1 numeric).
+- `code` (Number) Regulatory country code (ISO 3166-1 numeric). Read from the controller when the configuration leaves it out.
 
 
 <a id="nestedatt--doh"></a>
@@ -191,14 +191,11 @@ Optional:
 <a id="nestedatt--doh--custom_servers"></a>
 ### Nested Schema for `doh.custom_servers`
 
-Required:
-
-- `sdns_stamp` (String) DNS stamp (sdns://) for the custom resolver.
-- `server_name` (String) Human-readable name for this custom server.
-
 Optional:
 
 - `enabled` (Boolean) Enable this custom server. Defaults to true.
+- `sdns_stamp` (String) DNS stamp (sdns://) for the custom resolver.
+- `server_name` (String) Human-readable name for this custom server.
 
 
 
@@ -255,7 +252,7 @@ Optional:
 <a id="nestedatt--ips--honeypot"></a>
 ### Nested Schema for `ips.honeypot`
 
-Required:
+Optional:
 
 - `ip_address` (String) IP address to use as a honeypot.
 - `network_id` (String) Network ID this honeypot IP belongs to.
@@ -285,7 +282,7 @@ Optional:
 <a id="nestedatt--ips--suppression--alerts--tracking"></a>
 ### Nested Schema for `ips.suppression.alerts.tracking`
 
-Required:
+Optional:
 
 - `direction` (String) Match direction: both, src, or dest.
 - `mode` (String) Match mode: ip, subnet, or network.
@@ -296,7 +293,7 @@ Required:
 <a id="nestedatt--ips--suppression--whitelist"></a>
 ### Nested Schema for `ips.suppression.whitelist`
 
-Required:
+Optional:
 
 - `direction` (String) Match direction: both, src, or dest.
 - `mode` (String) Match mode: ip, subnet, or network.
@@ -353,15 +350,12 @@ Optional:
 <a id="nestedatt--mgmt--ssh--keys"></a>
 ### Nested Schema for `mgmt.ssh.keys`
 
-Required:
-
-- `name` (String) Name of SSH key.
-- `type` (String) Type of SSH key, e.g. ssh-rsa.
-
 Optional:
 
 - `comment` (String) Comment.
 - `key` (String) Public SSH key.
+- `name` (String) Name of SSH key.
+- `type` (String) Type of SSH key, e.g. ssh-rsa.
 
 
 
