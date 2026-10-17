@@ -2775,12 +2775,15 @@ func (r *networkResource) networkToModel(
 		} else {
 			model.GatewayType = types.StringPointerValue(network.GatewayType)
 		}
-		ipv6Obj, d := r.ipv6ToFramework(
-			ctx,
-			network,
-			types.ObjectNull(networkIPv6AttrTypes()),
-			false,
-		)
+		// The prior ipv6 object (plan or state) decides which managed leaves
+		// read back; see ipv6ManagedLeaves. A null prior object leaves
+		// setting_preference null, so a configured value would drift on every
+		// refresh if it were not passed through here.
+		priorIPv6 := types.ObjectNull(networkIPv6AttrTypes())
+		if previousModel != nil {
+			priorIPv6 = previousModel.IPv6
+		}
+		ipv6Obj, d := r.ipv6ToFramework(ctx, network, priorIPv6, false)
 		diags.Append(d...)
 		model.IPv6 = ipv6Obj
 		model.LteLan = types.BoolPointerValue(network.LteLanEnabled)
