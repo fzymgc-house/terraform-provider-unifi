@@ -291,6 +291,10 @@ func (r *apGroupResource) Read(
 	apGroup, err := r.client.GetAPGroup(ctx, site, id)
 	if err != nil {
 		if _, ok := err.(*unifi.NotFoundError); ok {
+			if isLegacyID(id) {
+				resp.Diagnostics.Append(legacyIDNotFoundDiagnostic("AP group", id))
+				return
+			}
 			resp.State.RemoveResource(ctx)
 			return
 		}
