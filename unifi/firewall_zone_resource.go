@@ -284,6 +284,10 @@ func (r *firewallZoneResource) Read(
 	zone, err := r.client.GetFirewallZone(ctx, site, id)
 	if err != nil {
 		if _, ok := err.(*unifi.NotFoundError); ok {
+			if isLegacyID(id) {
+				resp.Diagnostics.Append(legacyIDNotFoundDiagnostic("firewall zone", id))
+				return
+			}
 			resp.State.RemoveResource(ctx)
 			return
 		}

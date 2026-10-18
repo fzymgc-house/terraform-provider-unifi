@@ -1823,3 +1823,27 @@ func TestFirewallPolicyEndpointListsUseStateForUnknown(t *testing.T) {
 // TestFirewallPolicyMatchOppositeSchema / TestFirewallPolicyMatchOppositeRoundTrip
 // (firewall_policy_match_opposite_test.go), which exercise the current
 // util.UpgradeRawState-based upgrader rather than the retired PriorSchema design.
+
+func TestCarryControllerPolicyKeys(t *testing.T) {
+	t.Parallel()
+
+	reportFlow := true
+	supported := true
+	live := &unifi.FirewallPolicy{
+		OriginID:            "6abd09ef1f816fd2e03301c4",
+		OriginType:          "",
+		ReportFlow:          &reportFlow,
+		ReportFlowSupported: &supported,
+	}
+	fp := &unifi.FirewallPolicy{Name: "p", Action: "BLOCK"}
+
+	carryControllerPolicyKeys(fp, live)
+
+	if fp.OriginID != live.OriginID || fp.ReportFlow != live.ReportFlow ||
+		fp.ReportFlowSupported != live.ReportFlowSupported {
+		t.Errorf("carry left a key behind: %+v", fp)
+	}
+	if fp.Name != "p" || fp.Action != "BLOCK" {
+		t.Errorf("carry changed a planned key: %+v", fp)
+	}
+}

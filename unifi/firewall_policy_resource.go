@@ -865,6 +865,10 @@ func (r *firewallPolicyResource) Read(
 	fp, err := r.client.GetFirewallPolicy(ctx, site, id)
 	if err != nil {
 		if _, ok := err.(*unifi.NotFoundError); ok {
+			if isLegacyID(id) {
+				resp.Diagnostics.Append(legacyIDNotFoundDiagnostic("firewall policy", id))
+				return
+			}
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -921,6 +925,18 @@ func (r *firewallPolicyResource) Update(
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// The update replaces the whole policy, so the keys the controller stores and the schema
+	// does not hold are carried as read.
+	live, err := r.client.GetFirewallPolicy(ctx, site, state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading Firewall Policy",
+			"Could not read firewall policy "+state.ID.ValueString()+" before the update: "+err.Error(),
+		)
+		return
+	}
+	carryControllerPolicyKeys(fp, live)
 
 	// matching_target_type is firmware-derived: the controller (and the
 	// provider's own firewallPolicyMatchingTargetType helper) may set it to a
@@ -1184,6 +1200,16 @@ func portToStringValue(p string) types.String {
 // ---------------------------------------------------------------------------
 // Conversion helpers
 // ---------------------------------------------------------------------------
+
+// carryControllerPolicyKeys copies onto fp the keys the controller stores on a policy that the
+// schema has no attribute for: the origin of a predefined policy, and from Network 11 the Flows
+// logging toggle and whether the gateway supports it.
+func carryControllerPolicyKeys(fp, live *unifi.FirewallPolicy) {
+	fp.OriginID = live.OriginID
+	fp.OriginType = live.OriginType
+	fp.ReportFlow = live.ReportFlow
+	fp.ReportFlowSupported = live.ReportFlowSupported
+}
 
 func modelToFirewallPolicy(
 	ctx context.Context,
