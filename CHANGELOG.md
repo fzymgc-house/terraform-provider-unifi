@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.5] - fzymgc-house fork
+
+### 🚀 Features
+
+- **UniFi Network 11.** go-unifi reads Network 11.0.89: the `date` of an SSH key is an epoch in
+  milliseconds, and the keys Network 11 added (`x_api_token`, `legacy_id`, the Flows logging keys
+  of a policy) survive an update.
+
+### 🐛 Bug Fixes
+
+- **A stale pre-Network 11 id is an error, not a removal.** Network 11 re-keyed every object to a
+  UUID. A firewall zone, an AP group or a firewall policy is read from its list, and nothing in the
+  list carries the old id, so the refresh removed the resource from the state and the next plan
+  created a second object with the same name. A read by an id of the old form that finds nothing
+  now stops with a message that says to remove the resource from the state and import it by its
+  new id.
+- **`unifi_firewall_policy`: an update carries the controller-owned keys.** The update replaces
+  the whole policy. It reads the live policy first and carries `origin_id`, `origin_type`,
+  `report_flow` and `report_flow_supported`, which the schema has no attribute for.
+
 ## [v0.60.0-fzymgc.4] - fzymgc-house fork
 
 ### 🐛 Bug Fixes
