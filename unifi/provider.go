@@ -291,6 +291,7 @@ func (p *unifiProvider) Resources(ctx context.Context) []func() resource.Resourc
 	return []func() resource.Resource{
 		NewRadiusUserResource,
 		NewDeprecatedAccountResource,
+		NewACLRuleResource,
 		NewAPGroupResource,
 		NewBGPResource,
 		NewDeviceFrameworkResource,
