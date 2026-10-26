@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.60.0-fzymgc.6] - fzymgc-house fork
+
+### 🚀 Features
+
+- **`unifi_acl_rule` manages a MAC ACL rule of the switches.** It states the network, the switches
+  that enforce the rule, and the source and destination MACs. An empty `switch_macs` puts the rule
+  on every switch, and an empty `destination_macs` matches every device. The resource refuses an
+  empty `source_macs`, because the controller reads it as every device, and a `BLOCK` rule would
+  then cut off the whole network. An update reads the stored rule and lays the plan over it, as
+  the ACL rule editor of the UI does. A write clears a stored MAC mask, as the editor does for a
+  list of devices.
+
 ## [v0.60.0-fzymgc.5] - fzymgc-house fork
 
 ### 🚀 Features
