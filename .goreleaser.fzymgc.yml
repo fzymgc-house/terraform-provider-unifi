@@ -1,8 +1,9 @@
 ---
 # Release config for the fzymgc-house fork of terraform-provider-unifi.
 # Upstream's .goreleaser.yml narrowed to the platforms that run it: linux_arm64 for the
-# HCP agent pool and darwin_arm64 for workstation plans. Artifact names, the manifest and
-# the detached SHA256SUMS signature keep the layout the private registry API expects.
+# cluster runners and darwin_arm64 for workstation plans. scripts/publish-artifacts-registry.sh
+# uploads the zip files, SHA256SUMS and its detached signature to the static OpenTofu registry
+# at https://artifacts.fzymgc.house.
 version: 2
 builds:
   - env:
